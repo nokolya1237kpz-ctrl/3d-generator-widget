@@ -101,7 +101,7 @@ header .subtitle {
     letter-spacing: 0.2px;
 }
 
-.select-box,
+/* ✅ ИСПРАВЛЕНО: Разделили стили input и select */
 .input-field {
     width: 100%;
     padding: 14px 16px;
@@ -118,19 +118,35 @@ header .subtitle {
     appearance: none;
 }
 
-/* Стили для select с кастомной стрелкой */
+/* ✅ ИСПРАВЛЕНО: Отдельные стили для select с одной стрелкой */
 .select-box {
+    width: 100%;
+    padding: 14px 40px 14px 16px; /* Увеличен правый padding для стрелки */
+    border: 1px solid #dce1e6;
+    border-radius: 12px;
+    font-size: 16px;
+    background: #f5f5f7;
+    color: #222222;
+    outline: none;
+    margin-bottom: 16px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+    cursor: pointer;
+    
+    /* Кастомная стрелка */
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%236c757d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 12px center;
     background-size: 20px;
-    padding-right: 40px;
-    cursor: pointer;
+    
+    /* Убираем стандартную стрелку браузера */
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
 }
 
 /* Состояние фокуса */
-.select-box:focus,
-.input-field:focus {
+.input-field:focus,
+.select-box:focus {
     border-color: #5c8db6;
     background: #ffffff;
     box-shadow: 0 0 0 3px rgba(92, 141, 182, 0.15);
@@ -451,15 +467,15 @@ small {
         color: #e1e3e6;
     }
     
-    .select-box,
-    .input-field {
+    .input-field,
+    .select-box {
         background: #2d2d2f;
         border-color: #444446;
         color: #e1e3e6;
     }
     
-    .select-box:focus,
-    .input-field:focus {
+    .input-field:focus,
+    .select-box:focus {
         border-color: #6a8fc4;
         background: #333336;
         box-shadow: 0 0 0 3px rgba(106, 143, 196, 0.25);
