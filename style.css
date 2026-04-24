@@ -1,167 +1,606 @@
-/* Общие стили для VK Mini App */
+/* ============================================================================
+   ГЛОБАЛЬНЫЕ СТИЛИ И СБРОС
+   ============================================================================ */
 * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
     -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
 }
 
+/* Разрешаем выделение в полях ввода */
+input, select, textarea {
+    -webkit-user-select: text;
+    -khtml-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+    user-select: text;
+}
+
+/* ============================================================================
+   БАЗОВЫЕ СТИЛИ ТЕЛА СТРАНИЦЫ
+   ============================================================================ */
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
     background: #edeef0;
-    padding: 12px;
-    padding-bottom: 30px;
+    color: #222222;
+    padding: 20px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-size: 16px;
 }
 
-/* Карточки */
+/* Контейнер для центрирования контента */
+.container {
+    width: 100%;
+    max-width: 480px;
+    margin: 0 auto;
+}
+
+/* ============================================================================
+   ЗАГОЛОВОК ПРИЛОЖЕНИЯ
+   ============================================================================ */
+header {
+    text-align: center;
+    margin-bottom: 24px;
+    padding: 0 10px;
+}
+
+header h1 {
+    font-size: 24px;
+    font-weight: 700;
+    color: #2c3e50;
+    margin-bottom: 4px;
+    letter-spacing: -0.5px;
+}
+
+header .subtitle {
+    color: #6c757d;
+    font-size: 14px;
+    font-weight: 400;
+}
+
+/* ============================================================================
+   КАРТОЧКИ — ОСНОВНОЙ КОНТЕЙНЕР КОНТЕНТА
+   ============================================================================ */
 .card {
     background: #ffffff;
-    border-radius: 14px;
-    padding: 18px;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
     margin-bottom: 16px;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
-    transition: all 0.2s ease;
+    border: 1px solid rgba(0, 0, 0, 0.03);
+    transition: all 0.2s ease-in-out;
 }
 
-/* Заголовки и метки */
-label {
-    font-weight: 600;
-    font-size: 14px;
+.card:active {
+    transform: scale(0.998);
+}
+
+/* ============================================================================
+   ФОРМЫ И ПОЛЯ ВВОДА
+   ============================================================================ */
+.input-label {
     display: block;
-    margin-top: 14px;
-    margin-bottom: 6px;
+    font-weight: 600;
+    font-size: 15px;
+    margin-bottom: 8px;
     color: #2c3e50;
+    letter-spacing: 0.2px;
 }
 
-label:first-of-type {
-    margin-top: 0;
-}
-
-/* Поля ввода и select */
-input, select {
+.select-box,
+.input-field {
     width: 100%;
-    padding: 12px;
-    border: 1px solid #d0d3d6;
+    padding: 14px 16px;
+    border: 1px solid #dce1e6;
     border-radius: 12px;
     font-size: 16px;
-    background: #ffffff;
-    transition: 0.2s;
+    background: #f5f5f7;
+    color: #222222;
     outline: none;
+    margin-bottom: 16px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
 }
 
-input:focus, select:focus {
-    border-color: #4a76a8;
-    box-shadow: 0 0 0 2px rgba(74, 118, 168, 0.2);
+/* Стили для select с кастомной стрелкой */
+.select-box {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%236c757d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 20px;
+    padding-right: 40px;
+    cursor: pointer;
 }
 
-/* Кнопки */
-button {
-    background: #4a76a8;
-    color: white;
+/* Состояние фокуса */
+.select-box:focus,
+.input-field:focus {
+    border-color: #5c8db6;
+    background: #ffffff;
+    box-shadow: 0 0 0 3px rgba(92, 141, 182, 0.15);
+}
+
+/* Placeholder стили */
+.input-field::placeholder {
+    color: #a0a0a0;
+    opacity: 1;
+}
+
+/* ============================================================================
+   СЕТКА ПАРАМЕТРОВ (ДЛЯ ДИНАМИЧЕСКИХ ПОЛЕЙ)
+   ============================================================================ */
+.params-grid {
+    display: grid;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.param-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.param-row .input-label {
+    margin-bottom: 0;
+    font-size: 14px;
+}
+
+/* Checkbox стили */
+.option-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+}
+
+.option-row input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    cursor: pointer;
+    accent-color: #5c8db6;
+}
+
+.option-row label {
+    margin: 0;
+    font-weight: 500;
+    font-size: 15px;
+    cursor: pointer;
+    user-select: none;
+}
+
+/* ============================================================================
+   КНОПКИ
+   ============================================================================ */
+.btn-primary {
+    width: 100%;
+    padding: 16px 20px;
+    background: linear-gradient(135deg, #5c8db6 0%, #4a76a8 100%);
+    color: #ffffff;
     border: none;
     border-radius: 12px;
-    padding: 12px;
-    width: 100%;
     font-size: 16px;
-    font-weight: 500;
-    margin-top: 18px;
+    font-weight: 600;
     cursor: pointer;
-    transition: opacity 0.2s, transform 0.05s;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    box-shadow: 0 2px 4px rgba(92, 141, 182, 0.3);
 }
 
-button:active {
-    opacity: 0.8;
+.btn-primary:hover {
+    background: linear-gradient(135deg, #4a76a8 0%, #3b5f8a 100%);
+}
+
+.btn-primary:active {
+    transform: scale(0.98);
+    box-shadow: 0 1px 2px rgba(92, 141, 182, 0.3);
+}
+
+.btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* Кнопка скачивания */
+.btn-download {
+    display: block;
+    width: 100%;
+    background: linear-gradient(135deg, #4caf50 0%, #43a047 100%);
+    color: #ffffff;
+    text-decoration: none;
+    padding: 14px 20px;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 16px;
+    text-align: center;
+    margin-top: 12px;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(76, 175, 80, 0.3);
+}
+
+.btn-download:hover {
+    background: linear-gradient(135deg, #43a047 0%, #388e3c 100%);
+}
+
+.btn-download:active {
     transform: scale(0.98);
 }
 
-/* Группа кнопок в ряд */
-.inline-buttons {
-    display: flex;
-    gap: 10px;
-    margin-top: 10px;
-}
-
-.inline-buttons button {
-    margin-top: 0;
-    flex: 1;
-}
-
-/* Статус загрузки STL */
-.upload-status {
-    font-size: 12px;
-    color: #6c757d;
-    margin-top: 6px;
-    padding-left: 4px;
-}
-
-/* Результат расчёта */
-.result {
-    background: #e8f0fe;
-    border-radius: 14px;
-    padding: 16px;
-    font-size: 14px;
-    line-height: 1.5;
-    white-space: pre-wrap;
-    margin-top: 12px;
-    border-left: 4px solid #4a76a8;
-}
-
-.result b {
-    color: #2c3e50;
-}
-
-.result hr {
-    margin: 12px 0;
-    border: none;
-    border-top: 1px solid #cbd5e1;
-}
-
-/* Вкладки */
-.tabs {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 18px;
-}
-
-.tab {
-    flex: 1;
+/* ============================================================================
+   БЛОК СТАТУСА (ЗАГРУЗКА / ОШИБКА / УСПЕХ)
+   ============================================================================ */
+.status {
     text-align: center;
-    background: #e1e3e6;
-    border-radius: 40px;
-    padding: 10px 0;
+    padding: 12px 16px;
+    border-radius: 12px;
+    margin-bottom: 16px;
+    font-size: 14px;
     font-weight: 500;
-    cursor: pointer;
-    transition: 0.2s;
-    color: #2c3e50;
+    line-height: 1.4;
+    animation: fadeIn 0.3s ease-out;
 }
 
-.tab.active {
-    background: #4a76a8;
-    color: white;
+.status.loading {
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    color: #1976d2;
+    border: 1px solid #90caf9;
 }
 
-/* Утилиты */
+.status.error {
+    background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
+    color: #c62828;
+    border: 1px solid #ef9a9a;
+}
+
+.status.success {
+    background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+    color: #2e7d32;
+    border: 1px solid #a5d6a7;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ============================================================================
+   БЛОК РЕЗУЛЬТАТА
+   ============================================================================ */
+.result-card {
+    text-align: center;
+    background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%);
+    border: 1px solid #c8e6c9;
+    animation: slideUp 0.4s ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.success-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+    line-height: 1;
+}
+
+.result-card h3 {
+    font-size: 18px;
+    font-weight: 700;
+    color: #2e7d32;
+    margin-bottom: 8px;
+}
+
+.result-card .result-text {
+    color: #558b2f;
+    font-size: 14px;
+    margin-bottom: 16px;
+}
+
+.result-card small {
+    display: block;
+    margin-top: 12px;
+    color: #689f38;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+/* ============================================================================
+   ССЫЛКА НАЗАД
+   ============================================================================ */
+.back-link {
+    display: block;
+    text-align: center;
+    color: #5c8db6;
+    text-decoration: none;
+    padding: 12px 20px;
+    font-weight: 500;
+    font-size: 15px;
+    border-radius: 12px;
+    transition: background-color 0.2s ease;
+    margin-top: 8px;
+}
+
+.back-link:hover {
+    background: rgba(92, 141, 182, 0.1);
+}
+
+.back-link:active {
+    background: rgba(92, 141, 182, 0.2);
+}
+
+/* ============================================================================
+   УТИЛИТАРНЫЕ КЛАССЫ
+   ============================================================================ */
 .hidden {
-    display: none;
+    display: none !important;
 }
 
 small {
-    font-size: 11px;
+    font-size: 12px;
     color: #6c757d;
     display: block;
-    margin-top: 12px;
+    margin-top: 8px;
     text-align: center;
+    line-height: 1.4;
 }
 
-/* Адаптив для очень маленьких экранов */
+/* ============================================================================
+   АДАПТИВ ДЛЯ МАЛЕНЬКИХ ЭКРАНОВ
+   ============================================================================ */
 @media (max-width: 400px) {
     body {
-        padding: 8px;
+        padding: 16px;
+        font-size: 15px;
     }
+    
     .card {
-        padding: 14px;
+        padding: 16px;
+        border-radius: 14px;
     }
-    .inline-buttons {
-        flex-direction: column;
+    
+    header h1 {
+        font-size: 22px;
+    }
+    
+    .btn-primary,
+    .btn-download {
+        padding: 14px 16px;
+        font-size: 15px;
+    }
+    
+    .params-grid {
+        gap: 12px;
+    }
+}
+
+/* ============================================================================
+   АДАПТИВ ДЛЯ ПЛАНШЕТОВ И БОЛЬШИХ ЭКРАНОВ
+   ============================================================================ */
+@media (min-width: 768px) {
+    body {
+        padding: 32px;
+    }
+    
+    .container {
+        max-width: 520px;
+    }
+}
+
+/* ============================================================================
+   ПОДДЕРЖКА ТЁМНОЙ ТЕМЫ (prefers-color-scheme)
+   ============================================================================ */
+@media (prefers-color-scheme: dark) {
+    body {
+        background: #19191a;
+        color: #e1e3e6;
+    }
+    
+    header h1 {
+        color: #e1e3e6;
+    }
+    
+    header .subtitle {
+        color: #a0a0a0;
+    }
+    
+    .card {
+        background: #222224;
+        border-color: rgba(255, 255, 255, 0.08);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+    }
+    
+    .input-label {
+        color: #e1e3e6;
+    }
+    
+    .select-box,
+    .input-field {
+        background: #2d2d2f;
+        border-color: #444446;
+        color: #e1e3e6;
+    }
+    
+    .select-box:focus,
+    .input-field:focus {
+        border-color: #6a8fc4;
+        background: #333336;
+        box-shadow: 0 0 0 3px rgba(106, 143, 196, 0.25);
+    }
+    
+    .select-box {
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23a0a0a0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    }
+    
+    .btn-primary {
+        background: linear-gradient(135deg, #6a8fc4 0%, #5c8db6 100%);
+        box-shadow: 0 2px 4px rgba(106, 143, 196, 0.3);
+    }
+    
+    .btn-primary:hover {
+        background: linear-gradient(135deg, #5c8db6 0%, #4a76a8 100%);
+    }
+    
+    .btn-download {
+        background: linear-gradient(135deg, #5cb860 0%, #4caf50 100%);
+        box-shadow: 0 2px 4px rgba(92, 184, 96, 0.3);
+    }
+    
+    .status.loading {
+        background: linear-gradient(135deg, #1e3a5f 0%, #162f4d 100%);
+        color: #6a8fc4;
+        border-color: #3a5a7a;
+    }
+    
+    .status.error {
+        background: linear-gradient(135deg, #4a1e1e 0%, #3a1616 100%);
+        color: #ef9a9a;
+        border-color: #6a3a3a;
+    }
+    
+    .status.success {
+        background: linear-gradient(135deg, #1e3a2a 0%, #162f22 100%);
+        color: #a5d6a7;
+        border-color: #3a5a4a;
+    }
+    
+    .result-card {
+        background: linear-gradient(135deg, #1e3a2a 0%, #162f22 100%);
+        border-color: #3a5a4a;
+    }
+    
+    .result-card h3 {
+        color: #a5d6a7;
+    }
+    
+    .result-card .result-text {
+        color: #81c784;
+    }
+    
+    .result-card small {
+        color: #689f38;
+    }
+    
+    .back-link {
+        color: #6a8fc4;
+    }
+    
+    .back-link:hover {
+        background: rgba(106, 143, 196, 0.15);
+    }
+    
+    small {
+        color: #a0a0a0;
+    }
+}
+
+/* ============================================================================
+   АНИМАЦИИ И ЭФФЕКТЫ
+   ============================================================================ */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
+}
+
+.status.loading {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Плавная прокрутка */
+html {
+    scroll-behavior: smooth;
+}
+
+/* Скрытие скроллбара для чистого вида */
+body::-webkit-scrollbar {
+    width: 6px;
+}
+
+body::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+body::-webkit-scrollbar-thumb {
+    background: rgba(108, 117, 125, 0.4);
+    border-radius: 3px;
+}
+
+body::-webkit-scrollbar-thumb:hover {
+    background: rgba(108, 117, 125, 0.6);
+}
+
+/* ============================================================================
+   ДОСТУПНОСТЬ (ACCESSIBILITY)
+   ============================================================================ */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* Фокус для клавиатурной навигации */
+.select-box:focus-visible,
+.input-field:focus-visible,
+.btn-primary:focus-visible,
+.btn-download:focus-visible,
+.back-link:focus-visible {
+    outline: 2px solid #5c8db6;
+    outline-offset: 2px;
+}
+
+/* Высококонтрастный режим */
+@media (prefers-contrast: high) {
+    .card {
+        border: 2px solid #000;
+    }
+    
+    .btn-primary,
+    .btn-download {
+        border: 2px solid #000;
     }
 }
