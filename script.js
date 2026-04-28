@@ -1,7 +1,14 @@
 /**
  * 3D Model Generator — VK Mini App Frontend
  * Generates STL files via Flask backend using CadQuery
+ * 
+ * ✅ Added: Three.js 3D preview with grid, axes, and screenshot
  */
+
+// ============================================================================
+// ИМПОРТЫ
+// ============================================================================
+import { STLViewer } from './stl-viewer.js';
 
 // ============================================================================
 // ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ
@@ -25,6 +32,23 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     } else {
         console.log('ℹ️ Приложение запущено вне VK — vkBridge недоступен');
+    }
+    
+    // ✅ Инициализация 3D Viewer
+    let viewer = null;
+    try {
+        viewer = new STLViewer('preview-container');
+        console.log('✅ 3D Viewer инициализирован');
+    } catch (e) {
+        console.warn('⚠️ 3D Viewer не инициализирован:', e);
+    }
+    
+    // ✅ Кнопка скриншота
+    const screenshotBtn = document.getElementById('screenshot-btn');
+    if (screenshotBtn && viewer) {
+        screenshotBtn.addEventListener('click', () => {
+            viewer.takeScreenshot();
+        });
     }
     
     initGenerator();
@@ -103,10 +127,13 @@ const elements = {
     generateBtn: document.getElementById('generate-btn'),
     statusArea: document.getElementById('status-area'),
     resultArea: document.getElementById('result-area'),
-    downloadLink: document.getElementById('download-link')
+    downloadLink: document.getElementById('download-link'),
+    previewContainer: document.getElementById('preview-container'),
+    screenshotBtn: document.getElementById('screenshot-btn')
 };
 
 let currentBlobUrl = null;
+let viewer = null; // Глобальная ссылка на viewer
 
 // ============================================================================
 // ИНИЦИАЛИЗАЦИЯ
@@ -114,6 +141,15 @@ let currentBlobUrl = null;
 
 function initGenerator() {
     console.log('🚀 Инициализация 3D Generator...');
+    
+    // ✅ Инициализация viewer если ещё не создан
+    if (!viewer) {
+        try {
+            viewer = new STLViewer('preview-container');
+        } catch (e) {
+            console.warn('⚠️ Viewer init failed:', e);
+        }
+    }
     
     elements.modelType?.addEventListener('change', handleModelTypeChange);
     elements.generateBtn?.addEventListener('click', handleGenerateClick);
@@ -251,6 +287,30 @@ async function handleGenerateClick() {
         elements.downloadLink.href = currentBlobUrl;
         elements.downloadLink.download = filename;
         
+        // ✅ 3D Preview: показываем контейнер и загружаем модель
+        if (elements.previewContainer) {
+            elements.previewContainer.style.display = 'block';
+        }
+        if (elements.screenshotBtn) {
+            elements.screenshotBtn.style.display = 'block';
+            elements.screenshotBtn.disabled = true;
+            elements.screenshotBtn.textContent = '⏳ Рендеринг...';
+        }
+        
+        if (viewer) {
+            try {
+                await viewer.loadFromBlob(blob);
+                if (elements.screenshotBtn) {
+                    elements.screenshotBtn.disabled = false;
+                    elements.screenshotBtn.textContent = '📸 Сохранить скриншот';
+                }
+            } catch (e) {
+                console.error('3D render error:', e);
+                if (elements.previewContainer) elements.previewContainer.style.display = 'none';
+                if (elements.screenshotBtn) elements.screenshotBtn.style.display = 'none';
+            }
+        }
+        
         showResult(config.name, blob.size);
         showStatus('✅ Модель успешно сгенерирована!', 'success');
         
@@ -340,4 +400,10 @@ window.addEventListener('error', function(event) {
 
 window.addEventListener('unhandledrejection', function(event) {
     console.error('🔴 Unhandled promise rejection:', event.reason);
+});
+
+// ✅ Очистка при выгрузке страницы
+window.addEventListener('beforeunload', () => {
+    if (viewer) viewer.destroy();
+    if (currentBlobUrl) URL.revokeObjectURL(currentBlobUrl);
 });
