@@ -2,13 +2,18 @@
  * 3D Model Generator — VK Mini App Frontend
  * Generates STL files via Flask backend using CadQuery
  * 
- * ✅ Added: Three.js 3D preview with grid, axes, and screenshot
+ * ✅ Three.js 3D preview with grid, axes, screenshot (global scripts)
  */
 
 // ============================================================================
-// ИМПОРТЫ
+// ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ДЛЯ 3D
 // ============================================================================
-import { STLViewer } from './stl-viewer.js';
+let viewerScene = null;
+let viewerCamera = null;
+let viewerRenderer = null;
+let viewerControls = null;
+let viewerMesh = null;
+let currentBlobUrl = null;
 
 // ============================================================================
 // ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ
@@ -19,46 +24,222 @@ document.addEventListener('DOMContentLoaded', async function() {
     if (typeof vkBridge !== 'undefined') {
         try {
             await vkBridge.send('VKWebAppInit');
-            console.log('✅ VK Bridge успешно инициализирован');
-            
-            vkBridge.send('VKWebAppSetViewSettings', {
-                status_bar_style: 'light',
-                action_bar_color: '#5c8db6'
-            }).catch(function(e) {
-                console.log('ℹ️ View settings not applied:', e);
-            });
+            console.log('✅ VK Bridge инициализирован');
         } catch (error) {
             console.warn('⚠️ Ошибка инициализации VK Bridge:', error);
         }
-    } else {
-        console.log('ℹ️ Приложение запущено вне VK — vkBridge недоступен');
     }
     
-    // ✅ Инициализация 3D Viewer
-    let viewer = null;
-    try {
-        viewer = new STLViewer('preview-container');
-        console.log('✅ 3D Viewer инициализирован');
-    } catch (e) {
-        console.warn('⚠️ 3D Viewer не инициализирован:', e);
-    }
+    // Инициализация 3D Viewer
+    init3DViewer();
     
-    // ✅ Кнопка скриншота
-    const screenshotBtn = document.getElementById('screenshot-btn');
-    if (screenshotBtn && viewer) {
-        screenshotBtn.addEventListener('click', () => {
-            viewer.takeScreenshot();
-        });
-    }
-    
+    // Инициализация генератора
     initGenerator();
 });
 
 // ============================================================================
-// КОНФИГУРАЦИЯ
+// 3D VIEWER (глобальные скрипты Three.js)
 // ============================================================================
 
-const API_BASE_URL = 'https://3dcalk.freedynamicdns.net:8443';
+function init3DViewer() {
+    const container = document.getElementById('preview-container');
+    if (!container || typeof THREE === 'undefined') {
+        console.warn('⚠️ 3D Viewer: контейнер или THREE не найден');
+        return;
+    }
+    
+    try {
+        // Сцена
+        viewerScene = new THREE.Scene();
+        const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        viewerScene.background = new THREE.Color(isDark ? 0x1a1a1a : 0xf4f6f8);
+        
+        // Камера
+        viewerCamera = new THREE.PerspectiveCamera(
+            45, 
+            container.clientWidth / container.clientHeight, 
+            0.1, 
+            10000
+        );
+        viewerCamera.position.set(0, 0, 150);
+        
+        // Рендерер
+        viewerRenderer = new THREE.WebGLRenderer({ 
+            antialias: true, 
+            preserveDrawingBuffer: true,
+            alpha: false
+        });
+        viewerRenderer.setSize(container.clientWidth, container.clientHeight);
+        viewerRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        viewerRenderer.outputEncoding = THREE.sRGBEncoding;
+        container.appendChild(viewerRenderer.domElement);
+        
+        // Освещение
+        const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        dirLight.position.set(50, 50, 50);
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.4);
+        viewerScene.add(ambient, dirLight, hemiLight);
+        
+        // Сетка координат
+        const grid = new THREE.GridHelper(200, 20, 
+            isDark ? 0x555555 : 0x888888, 
+            isDark ? 0x333333 : 0x444444);
+        grid.position.y = -50;
+        viewerScene.add(grid);
+        
+        // Оси координат
+        const axes = new THREE.AxesHelper(50);
+        axes.position.y = -50;
+        viewerScene.add(axes);
+        
+        // Управление камерой
+        if (typeof THREE.OrbitControls !== 'undefined') {
+            viewerControls = new THREE.OrbitControls(viewerCamera, viewerRenderer.domElement);
+            viewerControls.enableDamping = true;
+            viewerControls.dampingFactor = 0.05;
+            viewerControls.minDistance = 10;
+            viewerControls.maxDistance = 2000;
+            viewerControls.target.set(0, -20, 0);
+        }
+        
+        // Анимация
+        animate3D();
+        
+        // Ресайз
+        window.addEventListener('resize', on3DResize);
+        
+        console.log('✅ 3D Viewer инициализирован');
+        
+    } catch (e) {
+        console.error('❌ Ошибка инициализации 3D Viewer:', e);
+    }
+}
+
+function animate3D() {
+    requestAnimationFrame(animate3D);
+    if (viewerControls) viewerControls.update();
+    if (viewerRenderer && viewerScene && viewerCamera) {
+        viewerRenderer.render(viewerScene, viewerCamera);
+    }
+}
+
+function on3DResize() {
+    const container = document.getElementById('preview-container');
+    if (!container || !viewerCamera || !viewerRenderer) return;
+    
+    viewerCamera.aspect = container.clientWidth / container.clientHeight;
+    viewerCamera.updateProjectionMatrix();
+    viewerRenderer.setSize(container.clientWidth, container.clientHeight);
+}
+
+function loadSTLToViewer(blob) {
+    return new Promise((resolve, reject) => {
+        if (!viewerScene || typeof THREE.STLLoader === 'undefined') {
+            reject(new Error('3D Viewer not initialized'));
+            return;
+        }
+        
+        // Очистка старой модели
+        if (viewerMesh) {
+            viewerScene.remove(viewerMesh);
+            if (viewerMesh.geometry) viewerMesh.geometry.dispose();
+            if (viewerMesh.material) viewerMesh.material.dispose();
+            viewerMesh = null;
+        }
+        
+        const loader = new THREE.STLLoader();
+        const url = URL.createObjectURL(blob);
+        
+        loader.load(url, function(geometry) {
+            URL.revokeObjectURL(url);
+            
+            geometry.computeVertexNormals();
+            geometry.center();
+            
+            const material = new THREE.MeshStandardMaterial({
+                color: 0x4a76a8,
+                roughness: 0.4,
+                metalness: 0.1,
+                flatShading: false
+            });
+            
+            viewerMesh = new THREE.Mesh(geometry, material);
+            viewerScene.add(viewerMesh);
+            
+            fitCameraToObject(viewerMesh);
+            resolve();
+            
+        }, undefined, function(error) {
+            URL.revokeObjectURL(url);
+            console.error('❌ Ошибка загрузки STL в 3D:', error);
+            reject(error);
+        });
+    });
+}
+
+function fitCameraToObject(object) {
+    if (!viewerCamera || !viewerControls) return;
+    
+    const box = new THREE.Box3().setFromObject(object);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+    
+    const fov = viewerCamera.fov * (Math.PI / 180);
+    const cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2)) * 1.5;
+    
+    viewerCamera.position.set(center.x, center.y, center.z + cameraZ);
+    viewerCamera.lookAt(center);
+    
+    if (viewerControls) {
+        viewerControls.target.copy(center);
+        viewerControls.update();
+    }
+}
+
+function takeScreenshot() {
+    if (!viewerRenderer) return;
+    
+    viewerRenderer.render(viewerScene, viewerCamera);
+    const dataURL = viewerRenderer.domElement.toDataURL('image/png');
+    
+    const link = document.createElement('a');
+    link.download = `3d-preview-${Date.now()}.png`;
+    link.href = dataURL;
+    link.click();
+    
+    console.log('📸 Скриншот сохранён');
+}
+
+function clear3DViewer() {
+    if (viewerMesh) {
+        viewerScene.remove(viewerMesh);
+        if (viewerMesh.geometry) viewerMesh.geometry.dispose();
+        if (viewerMesh.material) viewerMesh.material.dispose();
+        viewerMesh = null;
+    }
+}
+
+function destroy3DViewer() {
+    window.removeEventListener('resize', on3DResize);
+    clear3DViewer();
+    if (viewerRenderer) {
+        viewerRenderer.dispose();
+        const container = document.getElementById('preview-container');
+        if (container && container.contains(viewerRenderer.domElement)) {
+            container.removeChild(viewerRenderer.domElement);
+        }
+    }
+    viewerScene = null;
+    viewerCamera = null;
+    viewerRenderer = null;
+    viewerControls = null;
+}
+
+// ============================================================================
+// КОНФИГУРАЦИЯ МОДЕЛЕЙ
+// ============================================================================
 
 const MODEL_CONFIGS = {
     box: {
@@ -132,31 +313,30 @@ const elements = {
     screenshotBtn: document.getElementById('screenshot-btn')
 };
 
-let currentBlobUrl = null;
-let viewer = null; // Глобальная ссылка на viewer
-
 // ============================================================================
-// ИНИЦИАЛИЗАЦИЯ
+// ИНИЦИАЛИЗАЦИЯ ГЕНЕРАТОРА
 // ============================================================================
 
 function initGenerator() {
-    console.log('🚀 Инициализация 3D Generator...');
+    console.log('🚀 Инициализация генератора...');
     
-    // ✅ Инициализация viewer если ещё не создан
-    if (!viewer) {
-        try {
-            viewer = new STLViewer('preview-container');
-        } catch (e) {
-            console.warn('⚠️ Viewer init failed:', e);
-        }
+    if (elements.modelType) {
+        elements.modelType.addEventListener('change', handleModelTypeChange);
+    }
+    if (elements.generateBtn) {
+        elements.generateBtn.addEventListener('click', handleGenerateClick);
+    }
+    if (elements.downloadLink) {
+        elements.downloadLink.addEventListener('click', handleDownloadClick);
+    }
+    if (elements.screenshotBtn) {
+        elements.screenshotBtn.addEventListener('click', () => {
+            if (typeof takeScreenshot === 'function') takeScreenshot();
+        });
     }
     
-    elements.modelType?.addEventListener('change', handleModelTypeChange);
-    elements.generateBtn?.addEventListener('click', handleGenerateClick);
-    elements.downloadLink?.addEventListener('click', handleDownloadClick);
-    
     renderParams();
-    console.log('✅ Генератор готов к работе');
+    console.log('✅ Генератор готов');
 }
 
 // ============================================================================
@@ -165,6 +345,9 @@ function initGenerator() {
 
 function handleModelTypeChange(event) {
     hideResult();
+    if (elements.previewContainer) elements.previewContainer.style.display = 'none';
+    if (elements.screenshotBtn) elements.screenshotBtn.style.display = 'none';
+    clear3DViewer();
     renderParams();
 }
 
@@ -248,6 +431,7 @@ async function handleGenerateClick() {
         showStatus('⏳ Генерация модели...', 'loading');
         
         const endpoint = '/api/generate/' + modelType;
+        const API_BASE_URL = 'https://3dcalk.freedynamicdns.net:8443';
         
         const response = await fetch(API_BASE_URL + endpoint, {
             method: 'POST',
@@ -287,7 +471,7 @@ async function handleGenerateClick() {
         elements.downloadLink.href = currentBlobUrl;
         elements.downloadLink.download = filename;
         
-        // ✅ 3D Preview: показываем контейнер и загружаем модель
+        // ✅ 3D Preview
         if (elements.previewContainer) {
             elements.previewContainer.style.display = 'block';
         }
@@ -297,18 +481,15 @@ async function handleGenerateClick() {
             elements.screenshotBtn.textContent = '⏳ Рендеринг...';
         }
         
-        if (viewer) {
-            try {
-                await viewer.loadFromBlob(blob);
-                if (elements.screenshotBtn) {
-                    elements.screenshotBtn.disabled = false;
-                    elements.screenshotBtn.textContent = '📸 Сохранить скриншот';
-                }
-            } catch (e) {
-                console.error('3D render error:', e);
-                if (elements.previewContainer) elements.previewContainer.style.display = 'none';
-                if (elements.screenshotBtn) elements.screenshotBtn.style.display = 'none';
+        try {
+            await loadSTLToViewer(blob);
+            if (elements.screenshotBtn) {
+                elements.screenshotBtn.disabled = false;
+                elements.screenshotBtn.textContent = '📸 Сохранить скриншот';
             }
+        } catch (e) {
+            console.error('⚠️ 3D render error:', e);
+            // Не прерываем работу, если 3D не загрузился
         }
         
         showResult(config.name, blob.size);
@@ -402,8 +583,8 @@ window.addEventListener('unhandledrejection', function(event) {
     console.error('🔴 Unhandled promise rejection:', event.reason);
 });
 
-// ✅ Очистка при выгрузке страницы
+// Очистка при выгрузке
 window.addEventListener('beforeunload', () => {
-    if (viewer) viewer.destroy();
+    destroy3DViewer();
     if (currentBlobUrl) URL.revokeObjectURL(currentBlobUrl);
 });
