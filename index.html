@@ -7,36 +7,28 @@
     <meta name="theme-color" content="#5c8db6">
     <title>📐 3D Генератор моделей</title>
     
-    <!-- Подключение стилей -->
+    <!-- Стили -->
     <link rel="stylesheet" href="style.css">
     
-    <!-- ✅ VK Bridge — ОБЯЗАТЕЛЬНО для работы в VK Mini Apps -->
+    <!-- VK Bridge -->
     <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
     
-    <!-- Иконка приложения -->
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📐</text></svg>">
+    <!-- ✅ Three.js (глобальные скрипты — работают в VK Mini Apps) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.min.js"></script>
     
-    <!-- ✅ Three.js Import Map для 3D-просмотра -->
-    <script type="importmap">
-    {
-      "imports": {
-        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-      }
-    }
-    </script>
+    <!-- Иконка -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📐</text></svg>">
 </head>
 <body>
     <div class="container">
-        <!-- Заголовок приложения -->
         <header>
             <h1>📐 3D Генератор</h1>
             <p class="subtitle">Создайте модель по параметрам</p>
         </header>
 
-        <!-- Основная карточка с формой -->
         <div class="card">
-            <!-- Выбор типа модели -->
             <label for="model-type" class="input-label">Выберите модель</label>
             <select id="model-type" class="select-box">
                 <option value="box">📦 Коробка с защёлкой</option>
@@ -48,23 +40,19 @@
                 <option value="round-lid">🔵 Крышка для круглой</option>
             </select>
 
-            <!-- Контейнер для динамических полей параметров -->
             <div id="params-container" class="params-grid"></div>
 
-            <!-- Кнопка генерации -->
             <button id="generate-btn" class="btn-primary">
                 🚀 Сгенерировать STL
             </button>
         </div>
 
-        <!-- ✅ 3D Preview Container -->
+        <!-- 3D Preview -->
         <div id="preview-container" style="width:100%; height:260px; border-radius:14px; overflow:hidden; display:none; margin-bottom:12px; background:#f4f6f8; touch-action:none;"></div>
         <button id="screenshot-btn" class="btn-screenshot" style="display:none; width:100%; margin-bottom:12px;">📸 Сохранить скриншот</button>
 
-        <!-- Блок статуса (загрузка / ошибка / успех) -->
         <div id="status-area" class="status hidden" role="status" aria-live="polite"></div>
 
-        <!-- Блок результата со ссылкой на скачивание -->
         <div id="result-area" class="card result-card hidden">
             <div class="success-icon" aria-hidden="true">✅</div>
             <h3>Модель готова!</h3>
@@ -75,14 +63,13 @@
             <small>Откройте файл в слайсере (Cura, PrusaSlicer) для подготовки к печати</small>
         </div>
         
-        <!-- Ссылка возврата в главное меню (если приложение вложено) -->
         <a href="../" class="back-link">🔙 Вернуться в меню</a>
     </div>
 
-    <!-- ✅ Подключение основного скрипта как модуля -->
-    <script type="module" src="script.js"></script>
+    <!-- Скрипт приложения -->
+    <script src="script.js"></script>
     
-    <!-- Дополнительная инициализация для VK -->
+    <!-- Инициализация VK -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             if (typeof vkBridge !== 'undefined') {
