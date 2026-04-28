@@ -38,17 +38,39 @@ document.addEventListener('DOMContentLoaded', async function() {
 });
 
 // ============================================================================
-// 3D VIEWER (глобальные скрипты Three.js)
+// 3D VIEWER (с проверкой WebGL и обработкой ошибок)
 // ============================================================================
 
 function init3DViewer() {
     const container = document.getElementById('preview-container');
-    if (!container || typeof THREE === 'undefined') {
-        console.warn('⚠️ 3D Viewer: контейнер или THREE не найден');
+    if (!container) {
+        console.warn('⚠️ 3D Viewer: контейнер не найден');
+        return;
+    }
+    
+    // ✅ Проверка поддержки WebGL
+    if (!window.WebGLRenderingContext) {
+        show3DFallback('Ваш браузер не поддерживает WebGL');
+        return;
+    }
+    
+    // ✅ Проверка Three.js
+    if (typeof THREE === 'undefined') {
+        console.warn('⚠️ Three.js не загружен');
+        show3DFallback('Библиотека 3D не загружена');
         return;
     }
     
     try {
+        // Проверка поддержки WebGL контекста
+        const testCanvas = document.createElement('canvas');
+        const gl = testCanvas.getContext('webgl') || testCanvas.getContext('experimental-webgl');
+        
+        if (!gl) {
+            show3DFallback('WebGL не поддерживается');
+            return;
+        }
+        
         // Сцена
         viewerScene = new THREE.Scene();
         const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -63,15 +85,33 @@ function init3DViewer() {
         );
         viewerCamera.position.set(0, 0, 150);
         
-        // Рендерер
+        // Рендерер с дополнительной проверкой
         viewerRenderer = new THREE.WebGLRenderer({ 
             antialias: true, 
-            preserveDrawingBuffer: true,
-            alpha: false
+            preserveDrawingBuffer: true,  // ✅ Важно для скриншотов
+            alpha: false,
+            powerPreference: 'high-performance'
         });
-        viewerRenderer.setSize(container.clientWidth, container.clientHeight);
+        
+        // ✅ Проверка размера контейнера
+        const width = container.clientWidth;
+        const height = container.clientHeight;
+        
+        if (width === 0 || height === 0) {
+            console.warn('⚠️ Контейнер 3D имеет нулевой размер:', width, height);
+            show3DFallback('Контейнер не имеет размеров');
+            return;
+        }
+        
+        viewerRenderer.setSize(width, height);
         viewerRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         viewerRenderer.outputEncoding = THREE.sRGBEncoding;
+        
+        // ✅ Очистка предыдущего canvas если есть
+        while (container.firstChild) {
+            container.removeChild(container.firstChild);
+        }
+        
         container.appendChild(viewerRenderer.domElement);
         
         // Освещение
@@ -110,17 +150,61 @@ function init3DViewer() {
         window.addEventListener('resize', on3DResize);
         
         console.log('✅ 3D Viewer инициализирован');
+        console.log('📐 Размер canvas:', width, 'x', height);
         
     } catch (e) {
         console.error('❌ Ошибка инициализации 3D Viewer:', e);
+        show3DFallback('Ошибка 3D: ' + e.message);
     }
+}
+
+// ✅ Fallback сообщение если 3D не работает
+function show3DFallback(message) {
+    const container = document.getElementById('preview-container');
+    if (!container) return;
+    
+    container.style.display = 'block';
+    container.innerHTML = `
+        <div style="
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: ${window.matchMedia('(prefers-color-scheme: dark)').matches ? '#1a1a1a' : '#f4f6f8'};
+            color: ${window.matchMedia('(prefers-color-scheme: dark)').matches ? '#e1e3e6' : '#666'};
+            font-size: 14px;
+            text-align: center;
+            padding: 20px;
+        ">
+            <div style="font-size: 48px; margin-bottom: 12px;">📐</div>
+            <div style="font-weight: 600; margin-bottom: 8px;">3D-просмотр недоступен</div>
+            <div style="font-size: 12px; opacity: 0.8;">${message}</div>
+            <div style="margin-top: 12px; font-size: 11px; opacity: 0.6;">
+                Модель успешно сгенерирована<br>и доступна для скачивания
+            </div>
+        </div>
+    `;
+    
+    // Скрываем кнопку скриншота если 3D не работает
+    const screenshotBtn = document.getElementById('screenshot-btn');
+    if (screenshotBtn) {
+        screenshotBtn.style.display = 'none';
+    }
+    
+    console.warn('⚠️ 3D Viewer fallback:', message);
 }
 
 function animate3D() {
     requestAnimationFrame(animate3D);
     if (viewerControls) viewerControls.update();
     if (viewerRenderer && viewerScene && viewerCamera) {
-        viewerRenderer.render(viewerScene, viewerCamera);
+        try {
+            viewerRenderer.render(viewerScene, viewerCamera);
+        } catch (e) {
+            console.error('❌ Ошибка рендеринга:', e);
+        }
     }
 }
 
@@ -128,9 +212,17 @@ function on3DResize() {
     const container = document.getElementById('preview-container');
     if (!container || !viewerCamera || !viewerRenderer) return;
     
-    viewerCamera.aspect = container.clientWidth / container.clientHeight;
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+    
+    if (width === 0 || height === 0) {
+        console.warn('⚠️ Контейнер 3D имеет нулевой размер при ресайзе');
+        return;
+    }
+    
+    viewerCamera.aspect = width / height;
     viewerCamera.updateProjectionMatrix();
-    viewerRenderer.setSize(container.clientWidth, container.clientHeight);
+    viewerRenderer.setSize(width, height);
 }
 
 function loadSTLToViewer(blob) {
@@ -153,6 +245,14 @@ function loadSTLToViewer(blob) {
         
         loader.load(url, function(geometry) {
             URL.revokeObjectURL(url);
+            
+            // ✅ Проверка геометрии
+            if (!geometry || geometry.attributes.position.count === 0) {
+                reject(new Error('Пустая геометрия'));
+                return;
+            }
+            
+            console.log('📐 Загружена геометрия:', geometry.attributes.position.count, 'вершин');
             
             geometry.computeVertexNormals();
             geometry.center();
@@ -198,18 +298,44 @@ function fitCameraToObject(object) {
     }
 }
 
+// ✅ Исправленная функция скриншота
 function takeScreenshot() {
-    if (!viewerRenderer) return;
+    if (!viewerRenderer || !viewerScene || !viewerCamera) {
+        alert('❌ 3D-просмотр не инициализирован');
+        return;
+    }
     
-    viewerRenderer.render(viewerScene, viewerCamera);
-    const dataURL = viewerRenderer.domElement.toDataURL('image/png');
-    
-    const link = document.createElement('a');
-    link.download = `3d-preview-${Date.now()}.png`;
-    link.href = dataURL;
-    link.click();
-    
-    console.log('📸 Скриншот сохранён');
+    try {
+        // ✅ Принудительный рендер перед скриншотом
+        viewerRenderer.render(viewerScene, viewerCamera);
+        
+        // ✅ Проверка что canvas не пустой
+        const canvas = viewerRenderer.domElement;
+        if (canvas.width === 0 || canvas.height === 0) {
+            alert('❌ Canvas имеет нулевой размер');
+            return;
+        }
+        
+        // ✅ Получаем данные изображения
+        const dataURL = canvas.toDataURL('image/png');
+        
+        // ✅ Проверка что dataURL не пустой
+        if (!dataURL || dataURL.length < 100) {
+            alert('❌ Не удалось создать скриншот');
+            return;
+        }
+        
+        const link = document.createElement('a');
+        link.download = `3d-preview-${Date.now()}.png`;
+        link.href = dataURL;
+        link.click();
+        
+        console.log('📸 Скриншот сохранён:', dataURL.length, 'байт');
+        
+    } catch (e) {
+        console.error('❌ Ошибка создания скриншота:', e);
+        alert('❌ Ошибка при создании скриншота: ' + e.message);
+    }
 }
 
 function clear3DViewer() {
