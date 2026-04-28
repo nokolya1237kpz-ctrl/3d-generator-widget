@@ -2,7 +2,7 @@
  * 3D Model Generator — VK Mini App Frontend
  * Generates STL files via Flask backend using CadQuery
  * 
- * ✅ Three.js 3D preview with grid, axes, screenshot (global scripts)
+ * ✅ Fixed: 3D preview initialization with ResizeObserver for VK Mini Apps
  */
 
 // ============================================================================
@@ -14,13 +14,14 @@ let viewerRenderer = null;
 let viewerControls = null;
 let viewerMesh = null;
 let currentBlobUrl = null;
+let viewerInitialized = false;
+let resizeObserver = null;
 
 // ============================================================================
 // ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ
 // ============================================================================
 
 document.addEventListener('DOMContentLoaded', async function() {
-    // Инициализация VK Bridge
     if (typeof vkBridge !== 'undefined') {
         try {
             await vkBridge.send('VKWebAppInit');
@@ -30,46 +31,77 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
     
-    // Инициализация 3D Viewer
-    init3DViewer();
+    // ✅ Используем ResizeObserver для надёжной инициализации 3D
+    init3DViewerWithResizeObserver();
     
-    // Инициализация генератора
+    // ✅ Обработчик скриншота
+    const screenshotBtn = document.getElementById('screenshot-btn');
+    if (screenshotBtn) {
+        screenshotBtn.addEventListener('click', () => {
+            if (viewerInitialized && typeof takeScreenshot === 'function') {
+                takeScreenshot();
+            } else {
+                alert('❌ 3D-просмотр не инициализирован');
+            }
+        });
+    }
+    
     initGenerator();
 });
 
 // ============================================================================
-// 3D VIEWER (с проверкой WebGL и обработкой ошибок)
+// 3D VIEWER (с ResizeObserver для VK Mini Apps)
 // ============================================================================
 
-function init3DViewer() {
+function init3DViewerWithResizeObserver() {
     const container = document.getElementById('preview-container');
     if (!container) {
-        console.warn('⚠️ 3D Viewer: контейнер не найден');
+        console.warn('⚠️ Контейнер 3D не найден');
         return;
     }
     
     // ✅ Проверка поддержки WebGL
     if (!window.WebGLRenderingContext) {
-        show3DFallback('Ваш браузер не поддерживает WebGL');
+        console.warn('⚠️ WebGL не поддерживается');
         return;
     }
     
     // ✅ Проверка Three.js
     if (typeof THREE === 'undefined') {
         console.warn('⚠️ Three.js не загружен');
-        show3DFallback('Библиотека 3D не загружена');
         return;
     }
     
-    try {
-        // Проверка поддержки WebGL контекста
-        const testCanvas = document.createElement('canvas');
-        const gl = testCanvas.getContext('webgl') || testCanvas.getContext('experimental-webgl');
-        
-        if (!gl) {
-            show3DFallback('WebGL не поддерживается');
-            return;
+    // ✅ Создаём ResizeObserver для ожидания реальных размеров
+    resizeObserver = new ResizeObserver(entries => {
+        for (const entry of entries) {
+            const { width, height } = entry.contentRect;
+            
+            // ✅ Ждём пока контейнер получит реальные размеры (>0)
+            if (width > 0 && height > 0 && !viewerInitialized) {
+                console.log('📐 Контейнер получил размеры:', width, 'x', height);
+                initialize3DViewer(container, width, height);
+                resizeObserver.disconnect(); // Отключаем после инициализации
+            }
         }
+    });
+    
+    // Начинаем наблюдение
+    resizeObserver.observe(container);
+    
+    // ✅ Fallback: если через 2 секунды размеры не появились — показываем сообщение
+    setTimeout(() => {
+        if (!viewerInitialized) {
+            console.warn('⚠️ Timeout: контейнер не получил размеры за 2 сек');
+            show3DFallback('Не удалось инициализировать 3D-просмотр');
+            if (resizeObserver) resizeObserver.disconnect();
+        }
+    }, 2000);
+}
+
+function initialize3DViewer(container, width, height) {
+    try {
+        console.log('🚀 Инициализация 3D Viewer:', width, 'x', height);
         
         // Сцена
         viewerScene = new THREE.Scene();
@@ -77,37 +109,21 @@ function init3DViewer() {
         viewerScene.background = new THREE.Color(isDark ? 0x1a1a1a : 0xf4f6f8);
         
         // Камера
-        viewerCamera = new THREE.PerspectiveCamera(
-            45, 
-            container.clientWidth / container.clientHeight, 
-            0.1, 
-            10000
-        );
+        viewerCamera = new THREE.PerspectiveCamera(45, width / height, 0.1, 10000);
         viewerCamera.position.set(0, 0, 150);
         
-        // Рендерер с дополнительной проверкой
+        // Рендерер
         viewerRenderer = new THREE.WebGLRenderer({ 
             antialias: true, 
-            preserveDrawingBuffer: true,  // ✅ Важно для скриншотов
+            preserveDrawingBuffer: true,
             alpha: false,
             powerPreference: 'high-performance'
         });
-        
-        // ✅ Проверка размера контейнера
-        const width = container.clientWidth;
-        const height = container.clientHeight;
-        
-        if (width === 0 || height === 0) {
-            console.warn('⚠️ Контейнер 3D имеет нулевой размер:', width, height);
-            show3DFallback('Контейнер не имеет размеров');
-            return;
-        }
-        
         viewerRenderer.setSize(width, height);
         viewerRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         viewerRenderer.outputEncoding = THREE.sRGBEncoding;
         
-        // ✅ Очистка предыдущего canvas если есть
+        // ✅ Очищаем контейнер перед добавлением canvas
         while (container.firstChild) {
             container.removeChild(container.firstChild);
         }
@@ -121,19 +137,19 @@ function init3DViewer() {
         const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.4);
         viewerScene.add(ambient, dirLight, hemiLight);
         
-        // Сетка координат
+        // Сетка
         const grid = new THREE.GridHelper(200, 20, 
             isDark ? 0x555555 : 0x888888, 
             isDark ? 0x333333 : 0x444444);
         grid.position.y = -50;
         viewerScene.add(grid);
         
-        // Оси координат
+        // Оси
         const axes = new THREE.AxesHelper(50);
         axes.position.y = -50;
         viewerScene.add(axes);
         
-        // Управление камерой
+        // Управление
         if (typeof THREE.OrbitControls !== 'undefined') {
             viewerControls = new THREE.OrbitControls(viewerCamera, viewerRenderer.domElement);
             viewerControls.enableDamping = true;
@@ -149,19 +165,20 @@ function init3DViewer() {
         // Ресайз
         window.addEventListener('resize', on3DResize);
         
-        console.log('✅ 3D Viewer инициализирован');
-        console.log('📐 Размер canvas:', width, 'x', height);
+        viewerInitialized = true;
+        console.log('✅ 3D Viewer успешно инициализирован');
         
     } catch (e) {
-        console.error('❌ Ошибка инициализации 3D Viewer:', e);
-        show3DFallback('Ошибка 3D: ' + e.message);
+        console.error('❌ Ошибка инициализации 3D:', e);
+        show3DFallback('Ошибка: ' + e.message);
     }
 }
 
-// ✅ Fallback сообщение если 3D не работает
 function show3DFallback(message) {
     const container = document.getElementById('preview-container');
     if (!container) return;
+    
+    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     
     container.style.display = 'block';
     container.innerHTML = `
@@ -172,26 +189,25 @@ function show3DFallback(message) {
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            background: ${window.matchMedia('(prefers-color-scheme: dark)').matches ? '#1a1a1a' : '#f4f6f8'};
-            color: ${window.matchMedia('(prefers-color-scheme: dark)').matches ? '#e1e3e6' : '#666'};
+            background: ${isDark ? '#1a1a1a' : '#f4f6f8'};
+            color: ${isDark ? '#e1e3e6' : '#666'};
             font-size: 14px;
             text-align: center;
             padding: 20px;
+            box-sizing: border-box;
         ">
             <div style="font-size: 48px; margin-bottom: 12px;">📐</div>
             <div style="font-weight: 600; margin-bottom: 8px;">3D-просмотр недоступен</div>
-            <div style="font-size: 12px; opacity: 0.8;">${message}</div>
-            <div style="margin-top: 12px; font-size: 11px; opacity: 0.6;">
+            <div style="font-size: 12px; opacity: 0.8; margin-bottom: 12px;">${message}</div>
+            <div style="font-size: 11px; opacity: 0.6;">
                 Модель успешно сгенерирована<br>и доступна для скачивания
             </div>
         </div>
     `;
     
-    // Скрываем кнопку скриншота если 3D не работает
+    // ✅ Скрываем кнопку скриншота если 3D не работает
     const screenshotBtn = document.getElementById('screenshot-btn');
-    if (screenshotBtn) {
-        screenshotBtn.style.display = 'none';
-    }
+    if (screenshotBtn) screenshotBtn.style.display = 'none';
     
     console.warn('⚠️ 3D Viewer fallback:', message);
 }
@@ -210,29 +226,26 @@ function animate3D() {
 
 function on3DResize() {
     const container = document.getElementById('preview-container');
-    if (!container || !viewerCamera || !viewerRenderer) return;
+    if (!container || !viewerCamera || !viewerRenderer || !viewerInitialized) return;
     
     const width = container.clientWidth;
     const height = container.clientHeight;
     
-    if (width === 0 || height === 0) {
-        console.warn('⚠️ Контейнер 3D имеет нулевой размер при ресайзе');
-        return;
+    if (width > 0 && height > 0) {
+        viewerCamera.aspect = width / height;
+        viewerCamera.updateProjectionMatrix();
+        viewerRenderer.setSize(width, height);
     }
-    
-    viewerCamera.aspect = width / height;
-    viewerCamera.updateProjectionMatrix();
-    viewerRenderer.setSize(width, height);
 }
 
 function loadSTLToViewer(blob) {
     return new Promise((resolve, reject) => {
-        if (!viewerScene || typeof THREE.STLLoader === 'undefined') {
+        if (!viewerInitialized || !viewerScene || typeof THREE.STLLoader === 'undefined') {
             reject(new Error('3D Viewer not initialized'));
             return;
         }
         
-        // Очистка старой модели
+        // Очистка
         if (viewerMesh) {
             viewerScene.remove(viewerMesh);
             if (viewerMesh.geometry) viewerMesh.geometry.dispose();
@@ -246,13 +259,12 @@ function loadSTLToViewer(blob) {
         loader.load(url, function(geometry) {
             URL.revokeObjectURL(url);
             
-            // ✅ Проверка геометрии
             if (!geometry || geometry.attributes.position.count === 0) {
                 reject(new Error('Пустая геометрия'));
                 return;
             }
             
-            console.log('📐 Загружена геометрия:', geometry.attributes.position.count, 'вершин');
+            console.log('📐 Геометрия загружена:', geometry.attributes.position.count, 'вершин');
             
             geometry.computeVertexNormals();
             geometry.center();
@@ -272,7 +284,7 @@ function loadSTLToViewer(blob) {
             
         }, undefined, function(error) {
             URL.revokeObjectURL(url);
-            console.error('❌ Ошибка загрузки STL в 3D:', error);
+            console.error('❌ Ошибка загрузки STL:', error);
             reject(error);
         });
     });
@@ -298,28 +310,23 @@ function fitCameraToObject(object) {
     }
 }
 
-// ✅ Исправленная функция скриншота
 function takeScreenshot() {
-    if (!viewerRenderer || !viewerScene || !viewerCamera) {
+    if (!viewerInitialized || !viewerRenderer || !viewerScene || !viewerCamera) {
         alert('❌ 3D-просмотр не инициализирован');
         return;
     }
     
     try {
-        // ✅ Принудительный рендер перед скриншотом
         viewerRenderer.render(viewerScene, viewerCamera);
         
-        // ✅ Проверка что canvas не пустой
         const canvas = viewerRenderer.domElement;
         if (canvas.width === 0 || canvas.height === 0) {
             alert('❌ Canvas имеет нулевой размер');
             return;
         }
         
-        // ✅ Получаем данные изображения
         const dataURL = canvas.toDataURL('image/png');
         
-        // ✅ Проверка что dataURL не пустой
         if (!dataURL || dataURL.length < 100) {
             alert('❌ Не удалось создать скриншот');
             return;
@@ -330,16 +337,16 @@ function takeScreenshot() {
         link.href = dataURL;
         link.click();
         
-        console.log('📸 Скриншот сохранён:', dataURL.length, 'байт');
+        console.log('📸 Скриншот сохранён:', (dataURL.length / 1024).toFixed(1), 'KB');
         
     } catch (e) {
-        console.error('❌ Ошибка создания скриншота:', e);
-        alert('❌ Ошибка при создании скриншота: ' + e.message);
+        console.error('❌ Ошибка скриншота:', e);
+        alert('❌ Ошибка: ' + e.message);
     }
 }
 
 function clear3DViewer() {
-    if (viewerMesh) {
+    if (viewerMesh && viewerScene) {
         viewerScene.remove(viewerMesh);
         if (viewerMesh.geometry) viewerMesh.geometry.dispose();
         if (viewerMesh.material) viewerMesh.material.dispose();
@@ -349,6 +356,7 @@ function clear3DViewer() {
 
 function destroy3DViewer() {
     window.removeEventListener('resize', on3DResize);
+    if (resizeObserver) resizeObserver.disconnect();
     clear3DViewer();
     if (viewerRenderer) {
         viewerRenderer.dispose();
@@ -361,6 +369,7 @@ function destroy3DViewer() {
     viewerCamera = null;
     viewerRenderer = null;
     viewerControls = null;
+    viewerInitialized = false;
 }
 
 // ============================================================================
@@ -446,34 +455,24 @@ const elements = {
 function initGenerator() {
     console.log('🚀 Инициализация генератора...');
     
-    if (elements.modelType) {
-        elements.modelType.addEventListener('change', handleModelTypeChange);
-    }
-    if (elements.generateBtn) {
-        elements.generateBtn.addEventListener('click', handleGenerateClick);
-    }
-    if (elements.downloadLink) {
-        elements.downloadLink.addEventListener('click', handleDownloadClick);
-    }
-    if (elements.screenshotBtn) {
-        elements.screenshotBtn.addEventListener('click', () => {
-            if (typeof takeScreenshot === 'function') takeScreenshot();
-        });
-    }
+    if (elements.modelType) elements.modelType.addEventListener('change', handleModelTypeChange);
+    if (elements.generateBtn) elements.generateBtn.addEventListener('click', handleGenerateClick);
+    if (elements.downloadLink) elements.downloadLink.addEventListener('click', handleDownloadClick);
     
     renderParams();
     console.log('✅ Генератор готов');
 }
 
-// ============================================================================
-// ОБРАБОТЧИКИ
-// ============================================================================
-
 function handleModelTypeChange(event) {
     hideResult();
-    if (elements.previewContainer) elements.previewContainer.style.display = 'none';
+    if (elements.previewContainer) {
+        elements.previewContainer.style.display = 'none';
+        elements.previewContainer.innerHTML = '';
+    }
     if (elements.screenshotBtn) elements.screenshotBtn.style.display = 'none';
     clear3DViewer();
+    viewerInitialized = false;
+    init3DViewerWithResizeObserver();
     renderParams();
 }
 
@@ -503,8 +502,7 @@ function renderParams() {
                 'min="' + param.min + '" ' +
                 'max="' + param.max + '" ' +
                 'step="' + param.step + '" ' +
-                'value="' + param.value + '"' +
-                (param.required ? ' required' : '') + '>';
+                'value="' + param.value + '">';
             elements.paramsContainer.appendChild(row);
         }
     });
@@ -601,21 +599,27 @@ async function handleGenerateClick() {
         if (elements.previewContainer) {
             elements.previewContainer.style.display = 'block';
         }
-        if (elements.screenshotBtn) {
-            elements.screenshotBtn.style.display = 'block';
-            elements.screenshotBtn.disabled = true;
-            elements.screenshotBtn.textContent = '⏳ Рендеринг...';
-        }
         
-        try {
-            await loadSTLToViewer(blob);
+        if (viewerInitialized) {
             if (elements.screenshotBtn) {
-                elements.screenshotBtn.disabled = false;
-                elements.screenshotBtn.textContent = '📸 Сохранить скриншот';
+                elements.screenshotBtn.style.display = 'block';
+                elements.screenshotBtn.disabled = true;
+                elements.screenshotBtn.textContent = '⏳ Рендеринг...';
             }
-        } catch (e) {
-            console.error('⚠️ 3D render error:', e);
-            // Не прерываем работу, если 3D не загрузился
+            
+            try {
+                await loadSTLToViewer(blob);
+                if (elements.screenshotBtn) {
+                    elements.screenshotBtn.disabled = false;
+                    elements.screenshotBtn.textContent = '📸 Сохранить скриншот';
+                }
+            } catch (e) {
+                console.error('⚠️ 3D render error:', e);
+                if (elements.screenshotBtn) elements.screenshotBtn.style.display = 'none';
+            }
+        } else {
+            console.warn('⚠️ 3D Viewer не инициализирован — показываем fallback');
+            show3DFallback('3D-просмотр недоступен в текущей среде');
         }
         
         showResult(config.name, blob.size);
@@ -630,18 +634,14 @@ async function handleGenerateClick() {
 }
 
 function handleDownloadClick() {
-    console.log('💾 Начало скачивания файла...');
+    console.log('💾 Скачивание файла...');
     if (typeof vkBridge !== 'undefined') {
         vkBridge.send('VKWebAppTrackEvent', {
             event: 'file_download',
             params: { file_type: 'stl', source: 'generator' }
-        }).catch(function() {});
+        }).catch(() => {});
     }
 }
-
-// ============================================================================
-// УПРАВЛЕНИЕ СОСТОЯНИЕМ
-// ============================================================================
 
 function setLoadingState(isLoading) {
     if (elements.generateBtn) {
@@ -669,12 +669,6 @@ function hideStatus() {
 function showResult(modelName, fileSize) {
     const h3 = document.querySelector('.result-card h3');
     if (h3) h3.textContent = modelName + ' готова!';
-    
-    const nameEl = document.getElementById('model-name');
-    if (nameEl) nameEl.textContent = '📦 ' + modelName;
-    
-    const sizeEl = document.getElementById('model-size');
-    if (sizeEl) sizeEl.textContent = '~' + (fileSize / 1024).toFixed(1) + ' KB';
     
     elements.resultArea?.classList.remove('hidden');
 }
