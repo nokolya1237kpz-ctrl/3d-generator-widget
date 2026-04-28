@@ -621,9 +621,7 @@ body::-webkit-scrollbar-thumb:hover {
     }
 }
 
-/* ============================================================================
-   3D PREVIEW & SCREENSHOT
-   ============================================================================ */
+/* 3D Preview & Screenshot */
 .btn-screenshot {
     background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
     color: white;
@@ -633,16 +631,11 @@ body::-webkit-scrollbar-thumb:hover {
     font-size: 15px;
     font-weight: 500;
     cursor: pointer;
-    transition: opacity 0.2s, transform 0.05s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
+    transition: opacity 0.2s;
 }
-
 .btn-screenshot:hover { opacity: 0.95; }
-.btn-screenshot:active { transform: scale(0.98); opacity: 0.9; }
-.btn-screenshot:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.btn-screenshot:active { transform: scale(0.98); }
+.btn-screenshot:disabled { opacity: 0.5; cursor: not-allowed; }
 
 @media (prefers-color-scheme: dark) {
     #preview-container { background: #1a1a1a; }
