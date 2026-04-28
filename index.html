@@ -3,23 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="description" content="Генератор 3D-моделей для печати — создавайте коробки, шестерни, органайзеры по параметрам">
+    <meta name="description" content="Генератор 3D-моделей для печати">
     <meta name="theme-color" content="#5c8db6">
     <title>📐 3D Генератор моделей</title>
     
-    <!-- Стили -->
     <link rel="stylesheet" href="style.css">
-    
-    <!-- VK Bridge -->
     <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
     
-    <!-- ✅ Three.js (глобальные скрипты — работают в VK Mini Apps) -->
+    <!-- ✅ Three.js (глобальные скрипты) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.min.js"></script>
     
-    <!-- Иконка -->
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📐</text></svg>">
+    <link rel="icon" href="image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📐</text></svg>">
 </head>
 <body>
     <div class="container">
@@ -47,8 +43,8 @@
             </button>
         </div>
 
-        <!-- 3D Preview -->
-        <div id="preview-container" style="width:100%; height:260px; border-radius:14px; overflow:hidden; display:none; margin-bottom:12px; background:#f4f6f8; touch-action:none;"></div>
+        <!-- ✅ 3D Preview с ЯВНЫМИ размерами -->
+        <div id="preview-container" style="width:100%; height:260px; min-height:260px; border-radius:14px; overflow:hidden; display:none; margin-bottom:12px; background:#f4f6f8; touch-action:none; position:relative;"></div>
         <button id="screenshot-btn" class="btn-screenshot" style="display:none; width:100%; margin-bottom:12px;">📸 Сохранить скриншот</button>
 
         <div id="status-area" class="status hidden" role="status" aria-live="polite"></div>
@@ -66,10 +62,8 @@
         <a href="../" class="back-link">🔙 Вернуться в меню</a>
     </div>
 
-    <!-- Скрипт приложения -->
     <script src="script.js"></script>
     
-    <!-- Инициализация VK -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             if (typeof vkBridge !== 'undefined') {
@@ -77,7 +71,7 @@
                     status_bar_style: 'light',
                     action_bar_color: '#5c8db6'
                 }).catch(function(e) {
-                    console.log('View settings not applied:', e);
+                    // Игнорируем ошибку unsupported platform
                 });
             }
         });
