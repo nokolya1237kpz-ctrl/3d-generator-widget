@@ -1,12 +1,10 @@
-/**
+//**
  * 3D Model Generator — VK Mini App Frontend
- * Generates STL files via Flask backend using CadQuery
- * 
- * ✅ Fixed: 3D preview initialization with ResizeObserver for VK Mini Apps
+ * ✅ Fixed: Lazy initialization (init only when visible)
  */
 
 // ============================================================================
-// ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ДЛЯ 3D
+// ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
 // ============================================================================
 let viewerScene = null;
 let viewerCamera = null;
@@ -14,8 +12,7 @@ let viewerRenderer = null;
 let viewerControls = null;
 let viewerMesh = null;
 let currentBlobUrl = null;
-let viewerInitialized = false;
-let resizeObserver = null;
+let viewerInitialized = false; // Флаг: создан ли уже viewer
 
 // ============================================================================
 // ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ
@@ -25,23 +22,17 @@ document.addEventListener('DOMContentLoaded', async function() {
     if (typeof vkBridge !== 'undefined') {
         try {
             await vkBridge.send('VKWebAppInit');
-            console.log('✅ VK Bridge инициализирован');
-        } catch (error) {
-            console.warn('⚠️ Ошибка инициализации VK Bridge:', error);
-        }
+        } catch (e) {}
     }
     
-    // ✅ Используем ResizeObserver для надёжной инициализации 3D
-    init3DViewerWithResizeObserver();
+    // ✅ НЕ инициализируем 3D здесь! Ждем пока контейнер не станет видимым.
     
-    // ✅ Обработчик скриншота
+    // Обработчик скриншота
     const screenshotBtn = document.getElementById('screenshot-btn');
     if (screenshotBtn) {
         screenshotBtn.addEventListener('click', () => {
-            if (viewerInitialized && typeof takeScreenshot === 'function') {
+            if (viewerInitialized && viewerRenderer) {
                 takeScreenshot();
-            } else {
-                alert('❌ 3D-просмотр не инициализирован');
             }
         });
     }
@@ -50,58 +41,40 @@ document.addEventListener('DOMContentLoaded', async function() {
 });
 
 // ============================================================================
-// 3D VIEWER (с ResizeObserver для VK Mini Apps)
+// 3D VIEWER (Ленивая инициализация)
 // ============================================================================
 
-function init3DViewerWithResizeObserver() {
+function init3DViewer() {
+    // Если уже создан — выходим
+    if (viewerInitialized) return true;
+
     const container = document.getElementById('preview-container');
     if (!container) {
-        console.warn('⚠️ Контейнер 3D не найден');
-        return;
+        console.error('❌ Контейнер не найден');
+        return false;
     }
-    
-    // ✅ Проверка поддержки WebGL
-    if (!window.WebGLRenderingContext) {
-        console.warn('⚠️ WebGL не поддерживается');
-        return;
-    }
-    
-    // ✅ Проверка Three.js
-    if (typeof THREE === 'undefined') {
-        console.warn('⚠️ Three.js не загружен');
-        return;
-    }
-    
-    // ✅ Создаём ResizeObserver для ожидания реальных размеров
-    resizeObserver = new ResizeObserver(entries => {
-        for (const entry of entries) {
-            const { width, height } = entry.contentRect;
-            
-            // ✅ Ждём пока контейнер получит реальные размеры (>0)
-            if (width > 0 && height > 0 && !viewerInitialized) {
-                console.log('📐 Контейнер получил размеры:', width, 'x', height);
-                initialize3DViewer(container, width, height);
-                resizeObserver.disconnect(); // Отключаем после инициализации
-            }
-        }
-    });
-    
-    // Начинаем наблюдение
-    resizeObserver.observe(container);
-    
-    // ✅ Fallback: если через 2 секунды размеры не появились — показываем сообщение
-    setTimeout(() => {
-        if (!viewerInitialized) {
-            console.warn('⚠️ Timeout: контейнер не получил размеры за 2 сек');
-            show3DFallback('Не удалось инициализировать 3D-просмотр');
-            if (resizeObserver) resizeObserver.disconnect();
-        }
-    }, 2000);
-}
 
-function initialize3DViewer(container, width, height) {
+    // ✅ ПРОВЕРКА: Контейнер должен быть видимым и иметь размеры
+    const rect = container.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) {
+        console.warn('⚠️ Контейнер имеет размер 0. Невозможно инициализировать 3D.');
+        show3DFallback('Ошибка отображения (размер 0)');
+        return false;
+    }
+
+    // Проверка WebGL
+    if (!window.WebGLRenderingContext) {
+        show3DFallback('WebGL не поддерживается браузером');
+        return false;
+    }
+    
+    if (typeof THREE === 'undefined') {
+        show3DFallback('Библиотека 3D не загружена');
+        return false;
+    }
+
     try {
-        console.log('🚀 Инициализация 3D Viewer:', width, 'x', height);
+        console.log('🚀 Создание 3D Viewer...');
         
         // Сцена
         viewerScene = new THREE.Scene();
@@ -109,38 +82,32 @@ function initialize3DViewer(container, width, height) {
         viewerScene.background = new THREE.Color(isDark ? 0x1a1a1a : 0xf4f6f8);
         
         // Камера
-        viewerCamera = new THREE.PerspectiveCamera(45, width / height, 0.1, 10000);
+        viewerCamera = new THREE.PerspectiveCamera(45, rect.width / rect.height, 0.1, 10000);
         viewerCamera.position.set(0, 0, 150);
         
         // Рендерер
         viewerRenderer = new THREE.WebGLRenderer({ 
             antialias: true, 
-            preserveDrawingBuffer: true,
-            alpha: false,
+            preserveDrawingBuffer: true, // Важно для скриншотов
             powerPreference: 'high-performance'
         });
-        viewerRenderer.setSize(width, height);
+        
+        viewerRenderer.setSize(rect.width, rect.height);
         viewerRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         viewerRenderer.outputEncoding = THREE.sRGBEncoding;
         
-        // ✅ Очищаем контейнер перед добавлением canvas
-        while (container.firstChild) {
-            container.removeChild(container.firstChild);
-        }
-        
+        // Очистка и добавление
+        while (container.firstChild) container.removeChild(container.firstChild);
         container.appendChild(viewerRenderer.domElement);
         
-        // Освещение
+        // Свет
         const ambient = new THREE.AmbientLight(0xffffff, 0.6);
         const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
         dirLight.position.set(50, 50, 50);
-        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.4);
-        viewerScene.add(ambient, dirLight, hemiLight);
+        viewerScene.add(ambient, dirLight);
         
         // Сетка
-        const grid = new THREE.GridHelper(200, 20, 
-            isDark ? 0x555555 : 0x888888, 
-            isDark ? 0x333333 : 0x444444);
+        const grid = new THREE.GridHelper(200, 20, 0x888888, 0x444444);
         grid.position.y = -50;
         viewerScene.add(grid);
         
@@ -153,80 +120,37 @@ function initialize3DViewer(container, width, height) {
         if (typeof THREE.OrbitControls !== 'undefined') {
             viewerControls = new THREE.OrbitControls(viewerCamera, viewerRenderer.domElement);
             viewerControls.enableDamping = true;
-            viewerControls.dampingFactor = 0.05;
-            viewerControls.minDistance = 10;
-            viewerControls.maxDistance = 2000;
-            viewerControls.target.set(0, -20, 0);
         }
         
-        // Анимация
+        // Запуск цикла анимации
         animate3D();
         
         // Ресайз
         window.addEventListener('resize', on3DResize);
         
         viewerInitialized = true;
-        console.log('✅ 3D Viewer успешно инициализирован');
+        console.log('✅ 3D Viewer создан успешно');
+        return true;
         
     } catch (e) {
-        console.error('❌ Ошибка инициализации 3D:', e);
-        show3DFallback('Ошибка: ' + e.message);
+        console.error('❌ Ошибка создания 3D:', e);
+        show3DFallback('Ошибка инициализации: ' + e.message);
+        return false;
     }
-}
-
-function show3DFallback(message) {
-    const container = document.getElementById('preview-container');
-    if (!container) return;
-    
-    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    
-    container.style.display = 'block';
-    container.innerHTML = `
-        <div style="
-            width: 100%;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            background: ${isDark ? '#1a1a1a' : '#f4f6f8'};
-            color: ${isDark ? '#e1e3e6' : '#666'};
-            font-size: 14px;
-            text-align: center;
-            padding: 20px;
-            box-sizing: border-box;
-        ">
-            <div style="font-size: 48px; margin-bottom: 12px;">📐</div>
-            <div style="font-weight: 600; margin-bottom: 8px;">3D-просмотр недоступен</div>
-            <div style="font-size: 12px; opacity: 0.8; margin-bottom: 12px;">${message}</div>
-            <div style="font-size: 11px; opacity: 0.6;">
-                Модель успешно сгенерирована<br>и доступна для скачивания
-            </div>
-        </div>
-    `;
-    
-    // ✅ Скрываем кнопку скриншота если 3D не работает
-    const screenshotBtn = document.getElementById('screenshot-btn');
-    if (screenshotBtn) screenshotBtn.style.display = 'none';
-    
-    console.warn('⚠️ 3D Viewer fallback:', message);
 }
 
 function animate3D() {
     requestAnimationFrame(animate3D);
     if (viewerControls) viewerControls.update();
     if (viewerRenderer && viewerScene && viewerCamera) {
-        try {
-            viewerRenderer.render(viewerScene, viewerCamera);
-        } catch (e) {
-            console.error('❌ Ошибка рендеринга:', e);
-        }
+        viewerRenderer.render(viewerScene, viewerCamera);
     }
 }
 
 function on3DResize() {
+    if (!viewerInitialized || !viewerRenderer) return;
     const container = document.getElementById('preview-container');
-    if (!container || !viewerCamera || !viewerRenderer || !viewerInitialized) return;
+    if (!container) return;
     
     const width = container.clientWidth;
     const height = container.clientHeight;
@@ -238,204 +162,95 @@ function on3DResize() {
     }
 }
 
+// Загрузка STL модели в сцену
 function loadSTLToViewer(blob) {
     return new Promise((resolve, reject) => {
-        if (!viewerInitialized || !viewerScene || typeof THREE.STLLoader === 'undefined') {
-            reject(new Error('3D Viewer not initialized'));
+        if (!viewerScene || typeof THREE.STLLoader === 'undefined') {
+            reject(new Error('Viewer not ready'));
             return;
         }
         
-        // Очистка
+        // Удаляем старую модель
         if (viewerMesh) {
             viewerScene.remove(viewerMesh);
-            if (viewerMesh.geometry) viewerMesh.geometry.dispose();
-            if (viewerMesh.material) viewerMesh.material.dispose();
-            viewerMesh = null;
+            viewerMesh.geometry.dispose();
+            viewerMesh.material.dispose();
         }
         
         const loader = new THREE.STLLoader();
         const url = URL.createObjectURL(blob);
         
-        loader.load(url, function(geometry) {
+        loader.load(url, (geometry) => {
             URL.revokeObjectURL(url);
-            
-            if (!geometry || geometry.attributes.position.count === 0) {
-                reject(new Error('Пустая геометрия'));
-                return;
-            }
-            
-            console.log('📐 Геометрия загружена:', geometry.attributes.position.count, 'вершин');
-            
             geometry.computeVertexNormals();
             geometry.center();
             
-            const material = new THREE.MeshStandardMaterial({
-                color: 0x4a76a8,
-                roughness: 0.4,
-                metalness: 0.1,
-                flatShading: false
-            });
-            
+            const material = new THREE.MeshStandardMaterial({ color: 0x4a76a8, roughness: 0.4, metalness: 0.1 });
             viewerMesh = new THREE.Mesh(geometry, material);
             viewerScene.add(viewerMesh);
             
-            fitCameraToObject(viewerMesh);
-            resolve();
+            // Центрируем камеру на модели
+            const box = new THREE.Box3().setFromObject(viewerMesh);
+            const center = box.getCenter(new THREE.Vector3());
+            const size = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z);
+            const fov = viewerCamera.fov * (Math.PI / 180);
+            let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2)) * 2.0; // Отступ
             
-        }, undefined, function(error) {
+            viewerCamera.position.set(center.x, center.y, center.z + cameraZ);
+            viewerCamera.lookAt(center);
+            if(viewerControls) viewerControls.target.copy(center);
+            
+            resolve();
+        }, undefined, (err) => {
             URL.revokeObjectURL(url);
-            console.error('❌ Ошибка загрузки STL:', error);
-            reject(error);
+            reject(err);
         });
     });
 }
 
-function fitCameraToObject(object) {
-    if (!viewerCamera || !viewerControls) return;
-    
-    const box = new THREE.Box3().setFromObject(object);
-    const center = box.getCenter(new THREE.Vector3());
-    const size = box.getSize(new THREE.Vector3());
-    const maxDim = Math.max(size.x, size.y, size.z);
-    
-    const fov = viewerCamera.fov * (Math.PI / 180);
-    const cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2)) * 1.5;
-    
-    viewerCamera.position.set(center.x, center.y, center.z + cameraZ);
-    viewerCamera.lookAt(center);
-    
-    if (viewerControls) {
-        viewerControls.target.copy(center);
-        viewerControls.update();
-    }
-}
-
 function takeScreenshot() {
-    if (!viewerInitialized || !viewerRenderer || !viewerScene || !viewerCamera) {
-        alert('❌ 3D-просмотр не инициализирован');
-        return;
-    }
+    if (!viewerRenderer) return;
+    viewerRenderer.render(viewerScene, viewerCamera);
+    const dataURL = viewerRenderer.domElement.toDataURL('image/png');
+    const link = document.createElement('a');
+    link.download = `3d-model-${Date.now()}.png`;
+    link.href = dataURL;
+    link.click();
+}
+
+function show3DFallback(message) {
+    const container = document.getElementById('preview-container');
+    if (!container) return;
     
-    try {
-        viewerRenderer.render(viewerScene, viewerCamera);
-        
-        const canvas = viewerRenderer.domElement;
-        if (canvas.width === 0 || canvas.height === 0) {
-            alert('❌ Canvas имеет нулевой размер');
-            return;
-        }
-        
-        const dataURL = canvas.toDataURL('image/png');
-        
-        if (!dataURL || dataURL.length < 100) {
-            alert('❌ Не удалось создать скриншот');
-            return;
-        }
-        
-        const link = document.createElement('a');
-        link.download = `3d-preview-${Date.now()}.png`;
-        link.href = dataURL;
-        link.click();
-        
-        console.log('📸 Скриншот сохранён:', (dataURL.length / 1024).toFixed(1), 'KB');
-        
-    } catch (e) {
-        console.error('❌ Ошибка скриншота:', e);
-        alert('❌ Ошибка: ' + e.message);
-    }
-}
-
-function clear3DViewer() {
-    if (viewerMesh && viewerScene) {
-        viewerScene.remove(viewerMesh);
-        if (viewerMesh.geometry) viewerMesh.geometry.dispose();
-        if (viewerMesh.material) viewerMesh.material.dispose();
-        viewerMesh = null;
-    }
-}
-
-function destroy3DViewer() {
-    window.removeEventListener('resize', on3DResize);
-    if (resizeObserver) resizeObserver.disconnect();
-    clear3DViewer();
-    if (viewerRenderer) {
-        viewerRenderer.dispose();
-        const container = document.getElementById('preview-container');
-        if (container && container.contains(viewerRenderer.domElement)) {
-            container.removeChild(viewerRenderer.domElement);
-        }
-    }
-    viewerScene = null;
-    viewerCamera = null;
-    viewerRenderer = null;
-    viewerControls = null;
-    viewerInitialized = false;
+    // Показываем сообщение об ошибке
+    container.style.display = 'block';
+    container.innerHTML = `
+        <div style="width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#f4f6f8; color:#666; text-align:center; padding:20px;">
+            <div style="font-size:40px; margin-bottom:10px;">⚠️</div>
+            <div style="font-weight:bold;">3D-просмотр недоступен</div>
+            <div style="font-size:12px; margin-top:5px;">${message}</div>
+        </div>
+    `;
+    
+    // Скрываем кнопку скриншота, так как 3D нет
+    const btn = document.getElementById('screenshot-btn');
+    if (btn) btn.style.display = 'none';
 }
 
 // ============================================================================
-// КОНФИГУРАЦИЯ МОДЕЛЕЙ
+// ЛОГИКА ГЕНЕРАТОРА
 // ============================================================================
 
-const MODEL_CONFIGS = {
-    box: {
-        name: 'Коробка с защёлкой',
-        params: [
-            { id: 'length', label: 'Длина (см)', type: 'number', min: 1, max: 30, step: 0.5, value: 10 },
-            { id: 'width', label: 'Ширина (см)', type: 'number', min: 1, max: 30, step: 0.5, value: 5 },
-            { id: 'height', label: 'Высота (см)', type: 'number', min: 1, max: 20, step: 0.5, value: 5 }
-        ]
-    },
-    lid: {
-        name: 'Крышка для коробки',
-        params: [
-            { id: 'length', label: 'Длина (см)', type: 'number', min: 1, max: 30, step: 0.5, value: 10 },
-            { id: 'width', label: 'Ширина (см)', type: 'number', min: 1, max: 30, step: 0.5, value: 5 }
-        ]
-    },
-    gear: {
-        name: 'Шестерня',
-        params: [
-            { id: 'diameter', label: 'Диаметр (мм)', type: 'number', min: 15, max: 200, step: 1, value: 40 },
-            { id: 'teeth', label: 'Количество зубьев', type: 'number', min: 6, max: 80, step: 1, value: 16 },
-            { id: 'thickness', label: 'Толщина (мм)', type: 'number', min: 2, max: 50, step: 0.5, value: 5 },
-            { id: 'fillet', label: '✅ Скругление зубьев', type: 'checkbox', value: false }
-        ]
-    },
-    washer: {
-        name: 'Шайба',
-        params: [
-            { id: 'outer_d', label: 'Внешний диаметр (мм)', type: 'number', min: 5, max: 100, step: 1, value: 20 },
-            { id: 'inner_d', label: 'Внутренний диаметр (мм)', type: 'number', min: 2, max: 90, step: 1, value: 10 },
-            { id: 'thickness', label: 'Толщина (мм)', type: 'number', min: 1, max: 20, step: 0.5, value: 2 }
-        ]
-    },
-    organizer: {
-        name: 'Органайзер',
-        params: [
-            { id: 'width', label: 'Ширина (мм)', type: 'number', min: 20, max: 200, step: 5, value: 100 },
-            { id: 'depth', label: 'Глубина (мм)', type: 'number', min: 20, max: 200, step: 5, value: 50 },
-            { id: 'height', label: 'Высота (мм)', type: 'number', min: 10, max: 100, step: 5, value: 30 },
-            { id: 'sections', label: 'Количество секций', type: 'number', min: 2, max: 8, step: 1, value: 3 }
-        ]
-    },
-    'round-box': {
-        name: 'Круглая коробка',
-        params: [
-            { id: 'diameter', label: 'Диаметр (см)', type: 'number', min: 2, max: 20, step: 0.5, value: 8 },
-            { id: 'height', label: 'Высота (см)', type: 'number', min: 1, max: 20, step: 0.5, value: 4 }
-        ]
-    },
-    'round-lid': {
-        name: 'Крышка для круглой',
-        params: [
-            { id: 'diameter', label: 'Диаметр коробки (см)', type: 'number', min: 2, max: 20, step: 0.5, value: 8 }
-        ]
-    }
+const MODEL_CONFIGS = { /* ... ваш конфиг ... */
+    box: { name: 'Коробка с защёлкой', params: [{ id: 'length', label: 'Длина (см)', type: 'number', min: 1, max: 30, step: 0.5, value: 10 }, { id: 'width', label: 'Ширина (см)', type: 'number', min: 1, max: 30, step: 0.5, value: 5 }, { id: 'height', label: 'Высота (см)', type: 'number', min: 1, max: 20, step: 0.5, value: 5 }] },
+    lid: { name: 'Крышка', params: [{ id: 'length', label: 'Длина (см)', type: 'number', min: 1, max: 30, step: 0.5, value: 10 }, { id: 'width', label: 'Ширина (см)', type: 'number', min: 1, max: 30, step: 0.5, value: 5 }] },
+    gear: { name: 'Шестерня', params: [{ id: 'diameter', label: 'Диаметр (мм)', type: 'number', min: 15, max: 200, step: 1, value: 40 }, { id: 'teeth', label: 'Зубьев', type: 'number', min: 6, max: 80, step: 1, value: 16 }, { id: 'thickness', label: 'Толщина (мм)', type: 'number', min: 2, max: 50, step: 0.5, value: 5 }] },
+    washer: { name: 'Шайба', params: [{ id: 'outer_d', label: 'Внеш. диам. (мм)', type: 'number', min: 5, max: 100, step: 1, value: 20 }, { id: 'inner_d', label: 'Внут. диам. (мм)', type: 'number', min: 2, max: 90, step: 1, value: 10 }, { id: 'thickness', label: 'Толщина (мм)', type: 'number', min: 1, max: 20, step: 0.5, value: 2 }] },
+    organizer: { name: 'Органайзер', params: [{ id: 'width', label: 'Ширина (мм)', type: 'number', min: 20, max: 200, step: 5, value: 100 }, { id: 'depth', label: 'Глубина (мм)', type: 'number', min: 20, max: 200, step: 5, value: 50 }, { id: 'height', label: 'Высота (мм)', type: 'number', min: 10, max: 100, step: 5, value: 30 }, { id: 'sections', label: 'Секций', type: 'number', min: 2, max: 8, step: 1, value: 3 }] },
+    'round-box': { name: 'Круглая коробка', params: [{ id: 'diameter', label: 'Диаметр (см)', type: 'number', min: 2, max: 20, step: 0.5, value: 8 }, { id: 'height', label: 'Высота (см)', type: 'number', min: 1, max: 20, step: 0.5, value: 4 }] },
+    'round-lid': { name: 'Крышка круглая', params: [{ id: 'diameter', label: 'Диаметр (см)', type: 'number', min: 2, max: 20, step: 0.5, value: 8 }] }
 };
-
-// ============================================================================
-// DOM ЭЛЕМЕНТЫ
-// ============================================================================
 
 const elements = {
     modelType: document.getElementById('model-type'),
@@ -448,263 +263,110 @@ const elements = {
     screenshotBtn: document.getElementById('screenshot-btn')
 };
 
-// ============================================================================
-// ИНИЦИАЛИЗАЦИЯ ГЕНЕРАТОРА
-// ============================================================================
-
 function initGenerator() {
-    console.log('🚀 Инициализация генератора...');
-    
-    if (elements.modelType) elements.modelType.addEventListener('change', handleModelTypeChange);
-    if (elements.generateBtn) elements.generateBtn.addEventListener('click', handleGenerateClick);
-    if (elements.downloadLink) elements.downloadLink.addEventListener('click', handleDownloadClick);
-    
-    renderParams();
-    console.log('✅ Генератор готов');
-}
-
-function handleModelTypeChange(event) {
-    hideResult();
-    if (elements.previewContainer) {
-        elements.previewContainer.style.display = 'none';
-        elements.previewContainer.innerHTML = '';
-    }
-    if (elements.screenshotBtn) elements.screenshotBtn.style.display = 'none';
-    clear3DViewer();
-    viewerInitialized = false;
-    init3DViewerWithResizeObserver();
+    elements.modelType?.addEventListener('change', () => {
+        hideResult();
+        if(elements.previewContainer) elements.previewContainer.style.display = 'none';
+        if(elements.screenshotBtn) elements.screenshotBtn.style.display = 'none';
+        renderParams();
+    });
+    elements.generateBtn?.addEventListener('click', handleGenerateClick);
     renderParams();
 }
 
 function renderParams() {
-    const modelType = elements.modelType?.value;
-    const config = MODEL_CONFIGS[modelType];
-    
-    if (!config || !elements.paramsContainer) return;
-    
+    const config = MODEL_CONFIGS[elements.modelType?.value];
+    if (!config) return;
     elements.paramsContainer.innerHTML = '';
-    
-    config.params.forEach(function(param) {
-        if (param.type === 'checkbox') {
-            const row = document.createElement('div');
-            row.className = 'option-row';
-            row.innerHTML = 
-                '<input type="checkbox" id="' + param.id + '" ' + (param.value ? 'checked' : '') + '>' +
-                '<label for="' + param.id + '">' + param.label + '</label>';
-            elements.paramsContainer.appendChild(row);
+    config.params.forEach(p => {
+        if (p.type === 'checkbox') {
+            elements.paramsContainer.innerHTML += `<div class="option-row"><input type="checkbox" id="${p.id}" ${p.value?'checked':''}><label for="${p.id}">${p.label}</label></div>`;
         } else {
-            const row = document.createElement('div');
-            row.className = 'param-row';
-            row.innerHTML = 
-                '<label for="' + param.id + '" class="input-label">' + param.label + '</label>' +
-                '<input type="' + param.type + '" id="' + param.id + '" ' +
-                'class="input-field" ' +
-                'min="' + param.min + '" ' +
-                'max="' + param.max + '" ' +
-                'step="' + param.step + '" ' +
-                'value="' + param.value + '">';
-            elements.paramsContainer.appendChild(row);
+            elements.paramsContainer.innerHTML += `<div class="param-row"><label class="input-label">${p.label}</label><input type="number" id="${p.id}" class="input-field" min="${p.min}" max="${p.max}" step="${p.step}" value="${p.value}"></div>`;
         }
     });
-}
-
-function collectParams() {
-    const modelType = elements.modelType?.value;
-    const config = MODEL_CONFIGS[modelType];
-    const params = {};
-    
-    if (!config) throw new Error('Неизвестный тип модели: ' + modelType);
-    
-    for (let i = 0; i < config.params.length; i++) {
-        const param = config.params[i];
-        const element = document.getElementById(param.id);
-        
-        if (!element) continue;
-        
-        if (param.type === 'checkbox') {
-            params[param.id] = element.checked;
-        } else {
-            const value = parseFloat(element.value);
-            if (isNaN(value)) throw new Error(param.label + ' должно быть числом');
-            if (param.min !== undefined && value < param.min) {
-                throw new Error(param.label + ' не может быть меньше ' + param.min);
-            }
-            if (param.max !== undefined && value > param.max) {
-                throw new Error(param.label + ' не может быть больше ' + param.max);
-            }
-            params[param.id] = value;
-        }
-    }
-    
-    return params;
 }
 
 async function handleGenerateClick() {
     const modelType = elements.modelType?.value;
     const config = MODEL_CONFIGS[modelType];
-    
-    if (!config) {
-        showError('Неизвестный тип модели');
-        return;
-    }
-    
+    if (!config) return;
+
     try {
-        const params = collectParams();
+        setLoading(true);
+        showStatus('⏳ Генерация...', 'loading');
         
-        setLoadingState(true);
-        showStatus('⏳ Генерация модели...', 'loading');
-        
-        const endpoint = '/api/generate/' + modelType;
-        const API_BASE_URL = 'https://3dcalk.freedynamicdns.net:8443';
-        
-        const response = await fetch(API_BASE_URL + endpoint, {
+        const params = {};
+        config.params.forEach(p => {
+            const el = document.getElementById(p.id);
+            params[p.id] = p.type === 'checkbox' ? el.checked : parseFloat(el.value);
+        });
+
+        const res = await fetch('https://3dcalk.freedynamicdns.net:8443/api/generate/' + modelType, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/octet-stream'
-            },
+            headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(params)
         });
+
+        if (!res.ok) throw new Error('Ошибка сервера');
         
-        if (!response.ok) {
-            let errorMsg = 'Ошибка сервера: ' + response.status;
-            try {
-                const errorData = await response.json();
-                if (errorData.error) errorMsg = errorData.error;
-            } catch (e) {
-                try {
-                    const text = await response.text();
-                    if (text) errorMsg = text;
-                } catch (e2) {}
-            }
-            throw new Error(errorMsg);
-        }
+        const blob = await res.blob();
         
-        const blob = await response.blob();
+        // Скачивание
+        const url = URL.createObjectURL(blob);
+        elements.downloadLink.href = url;
+        elements.downloadLink.download = `model_${modelType}.stl`;
         
-        let filename = 'model_' + modelType + '.stl';
-        const disposition = response.headers.get('Content-Disposition');
-        if (disposition) {
-            const match = disposition.match(/filename="?([^";]+)"?/);
-            if (match && match[1]) filename = match[1];
-        }
+        // ✅ 3D ПРЕВЬЮ: Сначала показываем контейнер!
+        elements.previewContainer.style.display = 'block';
+        elements.previewContainer.innerHTML = ''; // Очистка
         
-        if (currentBlobUrl) URL.revokeObjectURL(currentBlobUrl);
-        currentBlobUrl = URL.createObjectURL(blob);
+        // ✅ Небольшая задержка, чтобы браузер применил display:block и вычислил размеры
+        await new Promise(r => setTimeout(r, 100));
         
-        elements.downloadLink.href = currentBlobUrl;
-        elements.downloadLink.download = filename;
+        // Теперь инициализируем 3D (контейнер уже имеет размеры)
+        const success = init3DViewer();
         
-        // ✅ 3D Preview
-        if (elements.previewContainer) {
-            elements.previewContainer.style.display = 'block';
-        }
-        
-        if (viewerInitialized) {
-            if (elements.screenshotBtn) {
-                elements.screenshotBtn.style.display = 'block';
-                elements.screenshotBtn.disabled = true;
-                elements.screenshotBtn.textContent = '⏳ Рендеринг...';
-            }
+        if (success) {
+            elements.screenshotBtn.style.display = 'block';
+            elements.screenshotBtn.textContent = '⏳ Рендеринг...';
+            elements.screenshotBtn.disabled = true;
             
-            try {
-                await loadSTLToViewer(blob);
-                if (elements.screenshotBtn) {
-                    elements.screenshotBtn.disabled = false;
-                    elements.screenshotBtn.textContent = '📸 Сохранить скриншот';
-                }
-            } catch (e) {
-                console.error('⚠️ 3D render error:', e);
-                if (elements.screenshotBtn) elements.screenshotBtn.style.display = 'none';
-            }
+            await loadSTLToViewer(blob);
+            
+            elements.screenshotBtn.textContent = '📸 Сохранить скриншот';
+            elements.screenshotBtn.disabled = false;
         } else {
-            console.warn('⚠️ 3D Viewer не инициализирован — показываем fallback');
-            show3DFallback('3D-просмотр недоступен в текущей среде');
+            // Если init3DViewer вернул false, он уже показал fallback сообщение
         }
+
+        showResult(config.name);
+        showStatus('✅ Готово!', 'success');
         
-        showResult(config.name, blob.size);
-        showStatus('✅ Модель успешно сгенерирована!', 'success');
-        
-    } catch (error) {
-        console.error('❌ Ошибка генерации:', error);
-        showError(error.message || 'Произошла неизвестная ошибка');
+    } catch (e) {
+        showStatus('❌ ' + e.message, 'error');
     } finally {
-        setLoadingState(false);
+        setLoading(false);
     }
 }
 
-function handleDownloadClick() {
-    console.log('💾 Скачивание файла...');
-    if (typeof vkBridge !== 'undefined') {
-        vkBridge.send('VKWebAppTrackEvent', {
-            event: 'file_download',
-            params: { file_type: 'stl', source: 'generator' }
-        }).catch(() => {});
-    }
+function setLoading(isLoading) {
+    elements.generateBtn.disabled = isLoading;
+    elements.generateBtn.textContent = isLoading ? '⏳ ...' : '🚀 Сгенерировать STL';
+    elements.paramsContainer.querySelectorAll('input').forEach(i => i.disabled = isLoading);
 }
 
-function setLoadingState(isLoading) {
-    if (elements.generateBtn) {
-        elements.generateBtn.disabled = isLoading;
-        elements.generateBtn.textContent = isLoading ? '⏳ Генерация...' : '🚀 Сгенерировать STL';
-    }
-    if (elements.modelType) elements.modelType.disabled = isLoading;
-    
-    const inputs = elements.paramsContainer?.querySelectorAll('input, select');
-    if (inputs) inputs.forEach(input => { input.disabled = isLoading; });
+function showStatus(msg, type) {
+    elements.statusArea.textContent = msg;
+    elements.statusArea.className = 'status ' + type;
+    elements.statusArea.classList.remove('hidden');
 }
 
-function showStatus(message, type) {
-    if (elements.statusArea) {
-        elements.statusArea.textContent = message;
-        elements.statusArea.className = 'status ' + type;
-        elements.statusArea.classList.remove('hidden');
-    }
-}
-
-function hideStatus() {
-    elements.statusArea?.classList.add('hidden');
-}
-
-function showResult(modelName, fileSize) {
-    const h3 = document.querySelector('.result-card h3');
-    if (h3) h3.textContent = modelName + ' готова!';
-    
-    elements.resultArea?.classList.remove('hidden');
+function showResult(name) {
+    document.querySelector('.result-card h3').textContent = name + ' готова!';
+    elements.resultArea.classList.remove('hidden');
 }
 
 function hideResult() {
-    elements.resultArea?.classList.add('hidden');
-    if (currentBlobUrl) {
-        URL.revokeObjectURL(currentBlobUrl);
-        currentBlobUrl = null;
-    }
+    elements.resultArea.classList.add('hidden');
 }
-
-function showError(message) {
-    showStatus('❌ ' + message, 'error');
-    hideResult();
-}
-
-// ============================================================================
-// ГЛОБАЛЬНЫЕ ОБРАБОТЧИКИ
-// ============================================================================
-
-window.addEventListener('error', function(event) {
-    console.error('🔴 Global error:', event.error);
-    if (elements.statusArea) {
-        elements.statusArea.textContent = '❌ Произошла ошибка в приложении';
-        elements.statusArea.className = 'status error';
-        elements.statusArea.classList.remove('hidden');
-    }
-});
-
-window.addEventListener('unhandledrejection', function(event) {
-    console.error('🔴 Unhandled promise rejection:', event.reason);
-});
-
-// Очистка при выгрузке
-window.addEventListener('beforeunload', () => {
-    destroy3DViewer();
-    if (currentBlobUrl) URL.revokeObjectURL(currentBlobUrl);
-});
