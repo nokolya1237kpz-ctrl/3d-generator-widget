@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="Генератор 3D-моделей для печати">
+    <meta name="theme-color" content="#0f1115">
+    <title>📐 3D Генератор моделей</title>
+    
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
+    
+    <!-- ✅ Three.js (глобальные скрипты) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.min.js"></script>
+    
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📐</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <a href="https://vk.com/pechatdlyadoma" target="_blank" rel="noopener" class="community-link">
+                ↗ Сообщество «Печать для дома»
+            </a>
+            <h1>📐 3D Генератор</h1>
+            <p class="subtitle">Создайте модель по параметрам и сразу проверьте её на 3D-столе</p>
+        </header>
+
+        <div class="card">
+            <label for="model-type" class="input-label">Выберите модель</label>
+            <select id="model-type" class="select-box">
+                <option value="box">📦 Коробка с защёлкой</option>
+                <option value="lid">📦 Крышка для коробки</option>
+                <option value="gear">⚙️ Шестерня с зубьями</option>
+                <option value="washer">🔩 Шайба / кольцо</option>
+                <option value="organizer">🗄️ Органайзер с секциями</option>
+                <option value="round-box">⚫ Круглая коробка</option>
+                <option value="round-lid">🔵 Крышка для круглой</option>
+                <option value="phone-stand">📱 Подставка для телефона</option>
+                <option value="cable-clip">🔌 Кабельный клип</option>
+                <option value="planter">🪴 Мини-кашпо</option>
+                <option value="planter-stand">🪴 Подставка под кашпо</option>
+                <option value="shelf-bracket">🧱 Кронштейн для полки</option>
+            </select>
+
+            <div class="preset-grid" aria-label="Быстрые шаблоны">
+                <button type="button" class="btn-preset" data-preset="planter-small">Малое кашпо</button>
+                <button type="button" class="btn-preset" data-preset="planter-medium">Среднее кашпо</button>
+                <button type="button" class="btn-preset" data-preset="stand-match">Подставка под кашпо</button>
+            </div>
+
+            <div id="params-container" class="params-grid"></div>
+
+            <button id="generate-btn" class="btn-primary">
+                🚀 Сгенерировать STL
+            </button>
+        </div>
+
+        <!-- ✅ 3D Preview с явными размерами и lazy init -->
+        <div id="preview-container" class="preview-container" style="display:none;"></div>
+        <button id="screenshot-btn" class="btn-screenshot" style="display:none;">📸 Сохранить скриншот</button>
+
+        <div id="status-area" class="status hidden" role="status" aria-live="polite"></div>
+
+        <div id="result-area" class="card result-card hidden">
+            <div class="success-icon" aria-hidden="true">✅</div>
+            <h3>Модель готова!</h3>
+            <p class="result-text">Файл готов к скачиванию и печати</p>
+            <button id="download-link" type="button" class="btn-download">
+                💾 Скачать STL
+            </button>
+            <small>Откройте файл в слайсере (Cura, PrusaSlicer) для подготовки к печати</small>
+        </div>
+        
+        <button id="back-btn" type="button" class="back-link">🔙 Вернуться в меню</button>
+    </div>
+
+    <script src="script.js"></script>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof vkBridge !== 'undefined') {
+                vkBridge.send('VKWebAppSetViewSettings', {
+                    status_bar_style: 'light',
+                    action_bar_color: '#5c8db6'
+                }).catch(function() {});
+            }
+        });
+    </script>
+</body>
+</html>
